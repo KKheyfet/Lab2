@@ -45,6 +45,12 @@ while True:
         nose_x = get_keypoint_position(0, 'x')
         nose_y = get_keypoint_position(0, 'y')
         print(f"Position - X: {nose_x:.3f}, Y: {nose_y:.3f}")
+        LA_x= get_keypoint_position(9,'x')
+        LA_y=get_keypoint_position(9,'y')
+        print(f"Position - LA_X: {LA_X:.3f}, LA_Y: {LA_y:.3f}")
+        RA_x= get_position_position(10,'x')
+        RA_y=get_keypoint_position(10,'y')
+        print(f"position - RA_x: {RA_x: .3f}, RA_y:{RA_x: .3f}")
         
     except (IndexError, AttributeError):
         print("No person detected in frame")
