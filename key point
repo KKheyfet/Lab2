@@ -50,7 +50,7 @@ delay = 0.005 #speed can be an output value from later loop
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(Dir, GPIO.OUT)
 GPIO.setup(Step,GPIO.out)
-GPIO.output(Dir, CW)
+GPIO.output(Dir, SD) # the SD is a variable to specify direction in later command 
 
 while True:
     # Capture a frame from the camera
