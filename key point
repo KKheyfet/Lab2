@@ -1,7 +1,6 @@
 import cv2
-import RPi.GPIO as GPIO
 import time
-import math
+import RPi.GPIO as GPIO
 from picamera2 import Picamera2
 from ultralytics import YOLO
 
@@ -34,103 +33,92 @@ picam2.configure("preview")
 picam2.start()
 
 # Load our YOLO11 model
-model = YOLO("yolo11n-pose.pt")
+model = YOLO("yolo11n-pose_ncnn_model")
 
-# Initialize previous positions
-previous_nose_x, previous_nose_y = 0, 0
-previous_LA_x, previous_LA_y = 0, 0
-previous_RA_x, previous_RA_y = 0, 0
+#Initialize previous positions
+previous_nose_x, previous_nose_y= 0, 0
+previous_LA_x, previous_LA_y= 0, 0
+previous_RA_x, previous_RA_y= 0, 0
 
 #initialize pin for stepper
 Dir = 22
 Step = 23
-CW = 1 #upward motion
-CCW = 0 #downward motion
+CW = 1
+CCW = 0
 SPR = 200
-step_count= SPR*D
-delay = 0.005/N #speed can be an output value from later loop
-CW = 1 #upward motion
-CCW = 0 #downward motion
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(Dir, GPIO.OUT)
-GPIO.setup(Step,GPIO.out)
-GPIO.output(Dir, SD) # the SD is a variable to specify direction in later command 
+GPIO.setup(Step, GPIO.OUT)
 
-for x in range (step_count):
-    GPIO.output(Step, GPIO.HIGH)
-    sleep(delay)
-    GIOP.output(Step, GPIO.LOW)
-    sleep(delay)
+
 
 while True:
     # Capture a frame from the camera
     frame = picam2.capture_array()
     
     # Run YOLO model on the captured frame and store the results
-    results = model.predict(frame, imgsz=320, verbose=False)
+    results = model.predict(frame, imgsz=256, verbose=False)
 
     try:
         # Get nose position (keypoint 0)
         nose_x = get_keypoint_position(0, 'x')
         nose_y = get_keypoint_position(0, 'y')
-        if abs(nose_x - previous_nose_x) > 0.01 or abs(nose_y - previous_nose_y) > 0.01:  # Threshold check
+        
+        if abs(nose_x - previous_nose_x) > 0.01:
             print(f"Nose moved from {previous_nose_x} to {nose_x}")
-            print(f"Nose moved from {previous_nose_y} to {nose_y}")
-            time.sleep(0.05)  # Wait for 0.05 seconds before updating
-            previous_nose_x = nose_x  # Update the previous x value after delay
-            previous_nose_y = nose_y  # Update the previous y value after delay
-            if nose_y > previous_nose_y:
-                SD=CW     #set spin direction upward
-                print("head is moving upward")
-            if nose_y < previous_nose_y:
-                SD=CCW   #set spin direction downward 
-                print("head is moving downward")
-            if abs(nose_y - previous_nose_y) < 0.01    #if the y value did not move larger than the set parameter, stop 
-                step_count=0 #stopping the motor from taking any step
-                print("head is not moving")
-
+            time.sleep(0.1) #0.1 seconds for update delay
+            previous_nose_x = nose_x
         print(f"Position - nose_x: {nose_x:.3f}, nose_y: {nose_y:.3f}")
-        # Get left arm position (keypoint 9)
-        LA_x= get_keypoint_position(9,'x')
-        LA_y=get_keypoint_position(9,'y')
-        print(f"Position - LA_X: {LA_X:.3f}, LA_Y: {LA_y:.3f}")
-        # Get left arm position (keypoint 10)
-        RA_x= get_keypoint_position(10,'x')
-        RA_y=get_keypoint_position(10,'y')
-        print(f"position - RA_x: {RA_x: .3f}, RA_y:{RA_y: .3f}")
-                    
+        
+        #Get left arm position (keypoint 9)        
+        LA_x = get_keypoint_position(9,'x')
+        LA_y = get_keypoint_position(9,'y')
+        if abs(LA_x - previous_LA_x) >0.01:
+            print(f"Left Arm moved from {previous_LA_x} to {LA_x}")
+            time.sleep(0.1) #0.1 seconds for update delay
+            previous_LA_x = LA_x        
+        print(f"Position - LA_x: {LA_x:.3f}, LA_y: {LA_y:.3f}")
     except (IndexError, AttributeError):
         print("No person detected in frame")
-
-
-    # change speed by changing the delay, depending on the magnitude of change
-    try: 
-        if abs(nose_x - previous_nose_x) < 0.01
-            D=0 # 0 rpm, no speed
+        
+    
+    
+    try:
+        if LA_x < previous_LA_x:
+            SD=CW
+            print("the direction is clockwise")
+        if LA_x > previous_LA_x:
+            SD=CCW
+            print("the direction is counterclockwise")
+        if LA_x == previous_LA_x:
+            D=0 # no speed
+            print("left arm did not move")
+        if abs(LA_x - previous_LA_x) < 0.02:
+            D=0 #no speed
             print("you are moving too slow")
-        if abs(nose_x - previous_nose_x) >= 0.01 and abs(nose_x - previous_nose_x) < 0.02:   
-            N=2 # 120 rpm
+        if abs(LA_x - previous_LA_x) >=0.02 and abs(LA_x - previous_LA_x) <= 0.03:
+            N=2
             D=20
-            print("speed 1")
-        if abs(nose_x - previous_nose_x) >= 0.02 and abs(nose_x - previous_nose_x) < 0.03:   
-            N=4 # 260 rpm
+            print("left arm is moving at speed 1")
+        if abs(LA_x - previous_LA_x) >0.03: 
+            N=4
             D=20
-            print("speed 2")
-        if abs(nose_x - previous_nose_x) >= 0.03 and abs(nose_x - previous_nose_x) < 0.04:   
-            N=4 # 260 rpm
-            D=20
-            print("speed 3")
-        elseif abs(nose_x - previous_nose_x) > 0.04:
-            N=8 # 480 rpm
-            D=20
-            print("speed 3")     
-    except (IndexError, AttributeError):
-        D=0 # No person in detected set speed to zero
-        print("No person detected in frame")
-        print("return to A pose")
-    
-    
+            print("left arm is moving at speed 2")
+        step_count =SPR*D 
+        delay=0.005/N
+        #output sequence for stepper motor
+        for x in range (step_count):
+            GPIO.output(Step, GPIO.HIGH)
+            time.sleep(delay)
+            GPIO.output(Step, GPIO.LOW)
+            time.sleep(delay)
+            print("spin")
+        GPIO.output(Dir, SD) #SD stand for spin direction, which is determined by user input
 
+    except (IndexError, AttributeError):
+        print("Return to A pose") #when no one in frame, reset mariionet
+    
+    
     # Output the visual detection data
     annotated_frame = results[0].plot()
     
