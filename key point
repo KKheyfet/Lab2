@@ -1,6 +1,7 @@
 import cv2
 import RPi.GPIO as GPIO
 import time
+import math
 from picamera2 import Picamera2
 from ultralytics import YOLO
 
@@ -39,20 +40,27 @@ model = YOLO("yolo11n-pose.pt")
 previous_nose_x, previous_nose_y = 0, 0
 previous_LA_x, previous_LA_y = 0, 0
 previous_RA_x, previous_RA_y = 0, 0
+
 #initialize pin for stepper
 Dir = 22
 Step = 23
 CW = 1 #upward motion
 CCW = 0 #downward motion
 SPR = 200
-step_count=SPR 
-delay = 0.005 #speed can be an output value from later loop
+step_count= SPR*D
+delay = 0.005/N #speed can be an output value from later loop
 CW = 1 #upward motion
 CCW = 0 #downward motion
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(Dir, GPIO.OUT)
 GPIO.setup(Step,GPIO.out)
 GPIO.output(Dir, SD) # the SD is a variable to specify direction in later command 
+
+for x in range (step_count):
+    GPIO.output(Step, GPIO.HIGH)
+    sleep(delay)
+    GIOP.output(Step, GPIO.LOW)
+    sleep(delay)
 
 while True:
     # Capture a frame from the camera
@@ -90,10 +98,37 @@ while True:
         RA_x= get_keypoint_position(10,'x')
         RA_y=get_keypoint_position(10,'y')
         print(f"position - RA_x: {RA_x: .3f}, RA_y:{RA_y: .3f}")
-   
+                    
     except (IndexError, AttributeError):
         print("No person detected in frame")
+
+
+    # change speed by changing the delay, depending on the magnitude of change
+    try: 
+        if abs(nose_x - previous_nose_x) < 0.01
+            D=0 # 0 rpm, no speed
+            print("you are moving too slow")
+        if abs(nose_x - previous_nose_x) >= 0.01 and abs(nose_x - previous_nose_x) < 0.02:   
+            N=2 # 120 rpm
+            D=20
+            print("speed 1")
+        if abs(nose_x - previous_nose_x) >= 0.02 and abs(nose_x - previous_nose_x) < 0.03:   
+            N=4 # 260 rpm
+            D=20
+            print("speed 2")
+        if abs(nose_x - previous_nose_x) >= 0.03 and abs(nose_x - previous_nose_x) < 0.04:   
+            N=4 # 260 rpm
+            D=20
+            print("speed 3")
+        elseif abs(nose_x - previous_nose_x) > 0.04:
+            N=8 # 480 rpm
+            D=20
+            print("speed 3")     
+    except (IndexError, AttributeError):
+        D=0 # No person in detected set speed to zero
+        print("No person detected in frame")
         print("return to A pose")
+    
     
 
     # Output the visual detection data
