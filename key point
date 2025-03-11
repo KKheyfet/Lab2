@@ -42,11 +42,13 @@ previous_RA_x, previous_RA_y = 0, 0
 #initialize pin for stepper
 Dir = 22
 Step = 23
-CW = 1
-CCW = 0
+CW = 1 #upward motion
+CCW = 0 #downward motion
 SPR = 200
 step_count=SPR 
 delay = 0.005 #speed can be an output value from later loop
+CW = 1 #upward motion
+CCW = 0 #downward motion
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(Dir, GPIO.OUT)
 GPIO.setup(Step,GPIO.out)
@@ -69,6 +71,16 @@ while True:
             time.sleep(0.05)  # Wait for 0.05 seconds before updating
             previous_nose_x = nose_x  # Update the previous x value after delay
             previous_nose_y = nose_y  # Update the previous y value after delay
+            if nose_y > previous_nose_y:
+                SD=CW     #set spin direction upward
+                print("head is moving upward")
+            if nose_y < previous_nose_y:
+                SD=CCW   #set spin direction downward 
+                print("head is moving downward")
+            if abs(nose_y - previous_nose_y) < 0.01    #if the y value did not move larger than the set parameter, stop 
+                step_count=0 #stopping the motor from taking any step
+                print("head is not moving")
+
         print(f"Position - nose_x: {nose_x:.3f}, nose_y: {nose_y:.3f}")
         # Get left arm position (keypoint 9)
         LA_x= get_keypoint_position(9,'x')
