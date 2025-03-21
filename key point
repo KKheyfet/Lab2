@@ -90,9 +90,6 @@ while True:
         if LA_x > previous_LA_x:
             SD=CCW
             print("the direction is counterclockwise")
-        if LA_x == previous_LA_x:
-            D=0 # no speed
-            print("left arm did not move")
         if abs(LA_x - previous_LA_x) < 0.02:
             D=0 #no speed
             print("you are moving too slow")
@@ -113,6 +110,7 @@ while True:
             GPIO.output(Step, GPIO.LOW)
             time.sleep(delay)
             print("spin")
+
         GPIO.output(Dir, SD) #SD stand for spin direction, which is determined by user input
 
     except (IndexError, AttributeError):
