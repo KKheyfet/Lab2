@@ -92,6 +92,7 @@ while True:
             print("the direction is counterclockwise")
         if abs(LA_x - previous_LA_x) < 0.02:
             D=0 #no speed
+            N=1
             print("you are moving too slow")
         if abs(LA_x - previous_LA_x) >=0.02 and abs(LA_x - previous_LA_x) <= 0.03:
             N=2
