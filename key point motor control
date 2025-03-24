@@ -1,1 +1,110 @@
+import cv2
+import time
+import RPi.GPIO as GPIO
+from picamera2 import Picamera2
+from ultralytics import YOLO
 
+def get_keypoint_position(keypoint_num, axis='x'):
+    """ 
+    Keypoint reference:
+        0: nose          5: left_shoulder  10: right_wrist    15: left_ankle
+        1: left_eye      6: right_shoulder 11: left_hip       16: right_ankle
+        2: right_eye     7: left_elbow     12: right_hip
+        3: left_ear		 8: right_elbow    13: left_knee
+        4: right_ear	 9: left_wrist     14: right_knee
+    """
+    if not 0 <= keypoint_num <= 16:
+        raise ValueError("Keypoint number must be between 0 and 16")
+    if axis.lower() not in ['x', 'y']:
+        raise ValueError("Axis must be 'x' or 'y'")
+    
+    # Get the keypoint data
+    keypoint = results[0].keypoints.xyn[0][keypoint_num]
+    
+    # Return x or y coordinate based on axis parameter
+    return keypoint[0].item() if axis.lower() == 'x' else keypoint[1].item()
+
+# Set up the camera with Picam
+picam2 = Picamera2()
+picam2.preview_configuration.main.size = (1280, 1280)
+picam2.preview_configuration.main.format = "RGB888"
+picam2.preview_configuration.align()
+picam2.configure("preview")
+picam2.start()
+
+# Load our YOLO11 model
+model = YOLO("yolo11n-pose_ncnn_model")
+
+#Initialize previous positions
+previous_nose_x, previous_nose_y= 0, 0
+previous_LA_x, previous_LA_y= 0, 0
+previous_RA_x, previous_RA_y= 0, 0
+
+#initialize pin for stepper
+Dir = 22
+Step = 23
+CW = 1
+CCW = 0
+SPR = 200
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(Dir, GPIO.OUT)
+GPIO.setup(Step, GPIO.OUT)
+
+
+
+while True:
+    # Capture a frame from the camera
+    frame = picam2.capture_array()
+    
+    # Run YOLO model on the captured frame and store the results
+    results = model.predict(frame, imgsz=256, verbose=False)
+
+    try: 
+        #Get left arm position (keypoint 9)        
+        LA_x = get_keypoint_position(9,'x')
+        LA_y = get_keypoint_position(9,'y')
+        if abs(LA_x - previous_LA_x) >0.01:
+            print(f"Left Arm moved from {previous_LA_y} to {LA_y}")
+            if LA_y < previous_LA_y:
+              GPIO.output(Dir, CW)
+              print("the direction is clockwise")
+            if LA_y > previous_LA_y:
+              GPIO.output(Dir, CCW)
+              print("the direction is counterclockwise")
+            time.sleep(0.1) #0.1 seconds for update delay
+            previous_LA_y = LA_y   
+        for x in range (SPR):
+            GPIO.output(Step, GPIO.HIGH)
+            time.sleep(delay)
+            GPIO.output(Step, GPIO.LOW)
+            time.sleep(delay)
+    except (IndexError, AttributeError):
+        print("No person detected in frame")
+
+    # Output the visual detection data
+    annotated_frame = results[0].plot()
+    
+    # Get inference time and calculate FPS
+    inference_time = results[0].speed['inference']
+    fps = 1000 / inference_time
+    text = f'FPS: {fps:.1f}'
+    
+    # Define font and position
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    text_size = cv2.getTextSize(text, font, 1, 2)[0]
+    text_x = annotated_frame.shape[1] - text_size[0] - 10
+    text_y = text_size[1] + 10
+    
+    # Draw the FPS text
+    cv2.putText(annotated_frame, text, (text_x, text_y), 
+                font, 1, (255, 255, 255), 2, cv2.LINE_AA)
+    
+    # Display the frame
+    cv2.imshow("Camera", annotated_frame)
+    
+    # Exit if 'q' is pressed
+    if cv2.waitKey(1) == ord("q"):
+        break
+
+# Clean up
+cv2.destroyAllWindows()
