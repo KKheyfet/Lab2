@@ -1,1 +1,35 @@
+# Online Python compiler (interpreter) to run Python online.
+# Write Python 3 code in this online editor and run it.
+import threading
+import time
+LA_x = 1
+LA_y = 2
 
+running = True
+calibration_done = threading.Event()
+Step=7
+def mode_select():
+    while True:
+        if not calibration_done.is_set():  # Only prompt if not calibrating
+            Mode = input("Enter mode (C/S/Q): ").lower()
+            
+            if Mode == 'c':
+                print('Calibration started')
+                calibration_done.clear()
+                threading.Thread(target=calibration).start()
+            elif Mode == 's':
+                print('Mirroring started')
+            elif Mode == 'q':
+                print('quit and reset tp A pose')
+
+def calibration():
+    global LA_x, LA_y
+    anchor_x=LA_x
+    anchor_y=LA_y
+    print(f"Calibrating... anchor_x: {anchor_x}, anchor_y: {anchor_y}")
+    time.sleep(2)  # Simulate work
+    print("Calibration complete!")
+    calibration_done.set()  # Signal completion
+    mode_select_thread.join()
+mode_select_thread = threading.Thread(target=mode_select)
+mode_select_thread.start()
