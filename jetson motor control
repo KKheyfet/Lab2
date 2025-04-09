@@ -4,58 +4,84 @@ import time
 import math
 import requests
 import Jetson.GPIO as GPIO
+import keyboard
 
-# Shared variables
-latest_y_value = 0.5
-latest_x_value = 0.5
-previous_LA_x, previous_LA_y= 0, 0
-previous_RA_x, previous_RA_y= 0, 0
-
-
-
-# for declaring port for stepper
-Lax_Dir = 22
-Lax_Step = 23
-Lay_Dir = 17
-Lay_Step = 18
-CW = 1
-CCW = 0
+LA_x = 1
+LA_y = 2
+CW=1
+CCW=0
+Step=7    #the physical pin number 7 on jetson
+Dir=10    #the physical pin number 10 on jetson
+limit_switch_pin = 17   #the physical pin number 17 on jetson
+step_count=0 #initialize value for testing, later can be an input from motion capture
+stepper = True
 GPIO.setmode(GPIO.BOARD)
-GPIO.setup(Lax_Dir, GPIO.OUT)
-GPIO.setup(Lax_Step, GPIO.OUT)
-GPIO.setup(Lay_Dir, GPIO.OUT)
-GPIO.setup(Lay_Step, GPIO.OUT)
-
-
-# get x and y from the motion capture 
-def x_y_from_MC():
-    while True:
-        LA_x= requests.get("http://producer:5000/get_var_LA_x")
-        LA_y= requests.get("http://producer:5000/get_var_LA_y")
-
-x_y_from_MC_thread = threading.Thread(target=x_y_from_MC)
-x_y_from_MC_thread.start()
-
-# change mode depending in user input 
-import threading
-import time
+GPIO.setup(Dir, GPIO.OUT)
+GPIO.setup(Step, GPIO.OUT)
+GPIO.setup(limit_switch_pin, GPIO.IN)
+command_done = threading.Event()
 
 def mode_select():
     while True:
-        Mode = input("please enter mode: C is for calibration, S is to start mirroring motion, Q is to quit and restart")    
-        if Mode.lower() == 'c':
-            print('mode calibration is selected')
-        if Mode.lower() == 's':
-            print('mode mirroring is selected')
-        if Mode.lower() == 'q':
-            print('mode quit is selected, returning to A pose')
-        
+        if not command_done.is_set():  # Only prompt if not calibrating
+            Mode = input("Enter mode (C/S/Q): ").lower()
+            if Mode == 'c':
+                print('Calibration started')
+                command_done.clear()
+                threading.Thread(target=calibration).start()
+            elif Mode == 's':
+                print('Mirroring started')
+                command_done.clear()
+                threading.Thread(target=move_stepper).start()
+            elif Mode == 'q':
+                print('quit and reset tp A pose')
+                command_done.clear()
+                threading.Thread(target=A_pose_reset).start()
+
+def calibration():
+    global LA_x, LA_y
+    anchor_x=LA_x
+    anchor_y=LA_y
+    print(f"Calibrating... anchor_x: {anchor_x}, anchor_y: {anchor_y}")
+    time.sleep(2)  # Simulate work
+    print("Calibration complete!")
+    command_done.set()  # Signal completion
+    mode_select_thread.join()
 mode_select_thread = threading.Thread(target=mode_select)
 mode_select_thread.start()
         
+        
+def move_stepper(): 
+    global step_count
+    for x in range(step_count):
+        GPIO.output(Step, GPIO.HIGH)
+        time.sleep(0.005/6)
+        GPIO.output(Step, GPIO.LOW)
+        time.sleep(0.005/6)
+        command_done.set()
+        mode_select_thread.join()
+    
+def A_pose_reset():
+    while GPIO.input(limit_switch_pin):    
+        GPIO.output(Dir, CCW) 
+        GPIO.output(Step, GPIO.HIGH)
+        time.sleep(0.005/6)
+        GPIO.output(Step, GPIO.LOW)
+        time.sleep(0.005/6)
+        if not GPIO.input(limit_switch_pin):
+            print("Switch is triggered.")
+            command_done.set()
+            mode_select_thread.join()
+            break
+    
+        
 
+def motor_step_count():
+    global step_count
+    
+        
+        
 
-def A_pose():
 
 def LA_y_detection_thread():
     global latest_y_value
@@ -67,11 +93,11 @@ def LA_y_detection_thread():
             latest_y_value = LA_y
             if abs(latest_y_value - previous_LA_y) >0.04:
                 if latest_y_value < previous_LA_y:
-                    GPIO.output(Lay_Dir, CCW)
+                    GPIO.output(Dir, CCW)
                     print("LAY_CCW")
                 if latest_y_value > previous_LA_y:
                     print("LAY_CW")
-                    GPIO.output(Lay_Dir, CW)
+                    GPIO.output(Dir, CW)
             time.sleep(0.1) #0.1 seconds for update delay
             previous_LA_y = latest_y_value
             
@@ -79,7 +105,6 @@ def LA_y_detection_thread():
             # Keep the previous value if detection fails
             pass
         time.sleep(0.06)
-
 # Start pose detection thread
 LA_y_thread = threading.Thread(target=LA_y_detection_thread)
 LA_y_thread.start()
@@ -109,7 +134,6 @@ def LA_x_detection_thread():
 LA_x_thread = threading.Thread(target=LA_x_detection_thread)
 LA_x_thread.start()
 
- 
     
 
 
