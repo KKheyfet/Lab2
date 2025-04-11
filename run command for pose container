@@ -1,0 +1,11 @@
+xhost +local:docker
+docker run -it --rm \
+  --gpus all \
+  --device /dev/video0 \
+  -e DISPLAY=$DISPLAY \
+  -v /tmp/.X11-unix:/tmp/.X11-unix \
+  -v $HOME/.Xauthority:/root/.Xauthority \
+  -e XAUTHORITY=/root/.Xauthority \
+  -v /usr/local/cuda-12.6/targets/aarch64-linux/lib:/usr/local/cuda-12.6/targets/aarch64-linux/lib \
+  -e LD_LIBRARY_PATH=/usr/local/cuda-12.6/targets/aarch64-linux/lib:$LD_LIBRARY_PATH \
+  mediapipe-pose
