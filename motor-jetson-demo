@@ -1,0 +1,31 @@
+
+import Jetson.GPIO as GPIO
+import time
+
+# Pin Definitions
+Step = 40  # Jetson Board Pin 7
+Dir = 12
+CW=GPIO.HIGH
+CCW=GPIO.LOW
+
+def main():
+    # Pin Setup:
+    GPIO.setmode(GPIO.BOARD)  # Jetson board numbering scheme
+    # set pin as an output pin with optional initial state of HIGH
+    GPIO.setup(Step, GPIO.OUT)  # Set pin as output
+    GPIO.setup(Dir, GPIO.OUT)  # Set pin as output
+    GPIO.output(Dir, GPIO.HIGH)
+    try:
+        while True:
+            GPIO.output(Step, GPIO.HIGH)  # Turn the pin on
+            
+            time.sleep(0.1)  # Wait 5 ms
+            GPIO.output(Step, GPIO.LOW)  # Turn the pin off
+
+            time.sleep(0.1)  # Wait 5 ms
+            print("spin")
+    finally:
+        GPIO.cleanup()
+
+if __name__ == '__main__':
+    main()
