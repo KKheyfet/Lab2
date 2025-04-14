@@ -1,10 +1,10 @@
 import threading
 import time
 import math
-import keyboard
-
-LA_y=0
-LA_x=0
+import sys
+import select
+LA_y=2
+LA_x=2
 left_shoulder_y=0
 left_shoulder_x=0
 anchor_y=0
@@ -13,41 +13,47 @@ max_range=200
 LA_x_step_count=0 #initialize value for testing, later can be an input from motion capture
 LA_y_step_count=0
 command_done = threading.Event()
-
+calibration_done = threading.Event()
+move_stepper_done=threading.Event()
+A_pose_reset_done=threading.Event()
 def mode_select():
     while True:
         if not command_done.is_set():  # Only prompt if not calibrating
             Mode = input("Enter mode (C/S/Q): ").lower()
             if Mode == 'c':
                 print('Calibration started')
-                command_done.clear()
+                command_done.set()
+                calibration_done.clear()
                 threading.Thread(target=calibration).start()
             elif Mode == 's':
                 print('Mirroring started')
-                command_done.clear()
+                command_done.set()
+                move_stepper_done.clear()
                 threading.Thread(target=move_stepper).start()
             elif Mode == 'q':
-                print('quit and reset tp A pose')
-                command_done.clear()
+                print('quit and reset to A pose')
+                command_done.set()
+                A_pose_reset_done.clear()
                 threading.Thread(target=A_pose_reset).start()
 
 def calibration():
     global LA_x, LA_y
     global left_shoulder_x, left_shoulder_y
-    anchor_x=LA_x
-    anchor_y=LA_y
-    arm_length=math.sqrt(abs(left_shoulder_x - LA_x)**2 +abs(left_shoulder_y - LA_y)**2)
-    max_LA_x_range = arm_length 
-    max_LA_y_range = arm_length*2
-    print(f"Calibrating... anchor_x: {anchor_x}, anchor_y: {anchor_y}")
-    time.sleep(2)  # Simulate work
-    print("Calibration complete!")
-    print(f"max_LA_x_range: {max_LA_x_range}, max_LA_y_range: {max_LA_y_range}")
-    time.sleep(1)
-    command_done.set()  # Signal completion
-    mode_select_thread.join()
-mode_select_thread = threading.Thread(target=mode_select)
-mode_select_thread.start()
+    global anchor_x, anchor_y
+    global max_LA_x_range, max_LA_y_range
+    if not calibration_done.is_set():
+        anchor_x=LA_x
+        anchor_y=LA_y
+        arm_length=math.sqrt(abs(left_shoulder_x - LA_x)**2 +abs(left_shoulder_y - LA_y)**2)
+        max_LA_x_range = arm_length 
+        max_LA_y_range = arm_length*2
+        print(f"Calibrating... anchor_x: {anchor_x}, anchor_y: {anchor_y}")
+        print(f"max_LA_x_range: {max_LA_x_range}, max_LA_y_range: {max_LA_y_range}")
+        print("Calibration complete!")
+        command_done.clear()  # Signal completion
+        calibration_done.set()
+   
+
         
         
 def move_stepper(): 
@@ -60,27 +66,33 @@ def move_stepper():
     global anchor_y
     global max_LA_x_range
     global max_LA_y_range
-    while True:
+    while not move_stepper_done.is_set():
         try:
             LA_x_step_count=((LA_x - anchor_x)/max_LA_x_range)*max_LA_x_range
             LA_y_step_count=((LA_y- anchor_y)/max_LA_y_range)*max_LA_x_range
-            
+            print("LA_x_step_count: ", LA_x_step_count)
         except (IndexError, AttributeError):
             # Keep the previous value if detection fails
             pass
         time.sleep(0.06)
-        if keyboard.is_pressed('space'):
-            print("space is pressed, return to modeselection")
-            time.sleep(1)
-            command_done.set()
-            mode_select_thread.join()
-            break
+        if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+            line = sys.stdin.readline()
+            if line.strip() == 'r':
+                print("Exiting loop.")
+                move_stepper_done.set()
+                command_done.clear()
     
 def A_pose_reset():
     global LA_x_step_count
     global LA_y_step_count
-    LA_x_step_count=0
-    LA_y_step_count=0
-    command_done.set()
-    mode_select_thread.join()    
+    if not A_pose_reset_done.is_set():
+        LA_x_step_count=0
+        LA_y_step_count=0
+        command_done.clear()
+        A_pose_reset_done.set()
+       
+        
+
+mode_select_thread = threading.Thread(target=mode_select)
+mode_select_thread.start()
         
