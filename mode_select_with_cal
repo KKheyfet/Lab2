@@ -1,35 +1,86 @@
-# Online Python compiler (interpreter) to run Python online.
-# Write Python 3 code in this online editor and run it.
 import threading
 import time
-LA_x = 1
-LA_y = 2
+import math
+import keyboard
 
-running = True
-calibration_done = threading.Event()
-Step=7
+LA_y=0
+LA_x=0
+left_shoulder_y=0
+left_shoulder_x=0
+anchor_y=0
+anchor_x=0
+max_range=200
+LA_x_step_count=0 #initialize value for testing, later can be an input from motion capture
+LA_y_step_count=0
+command_done = threading.Event()
+
 def mode_select():
     while True:
-        if not calibration_done.is_set():  # Only prompt if not calibrating
+        if not command_done.is_set():  # Only prompt if not calibrating
             Mode = input("Enter mode (C/S/Q): ").lower()
-            
             if Mode == 'c':
                 print('Calibration started')
-                calibration_done.clear()
+                command_done.clear()
                 threading.Thread(target=calibration).start()
             elif Mode == 's':
                 print('Mirroring started')
+                command_done.clear()
+                threading.Thread(target=move_stepper).start()
             elif Mode == 'q':
                 print('quit and reset tp A pose')
+                command_done.clear()
+                threading.Thread(target=A_pose_reset).start()
 
 def calibration():
     global LA_x, LA_y
+    global left_shoulder_x, left_shoulder_y
     anchor_x=LA_x
     anchor_y=LA_y
+    arm_length=math.sqrt(abs(left_shoulder_x - LA_x)**2 +abs(left_shoulder_y - LA_y)**2)
+    max_LA_x_range = arm_length 
+    max_LA_y_range = arm_length*2
     print(f"Calibrating... anchor_x: {anchor_x}, anchor_y: {anchor_y}")
     time.sleep(2)  # Simulate work
     print("Calibration complete!")
-    calibration_done.set()  # Signal completion
+    print(f"max_LA_x_range: {max_LA_x_range}, max_LA_y_range: {max_LA_y_range}")
+    time.sleep(1)
+    command_done.set()  # Signal completion
     mode_select_thread.join()
 mode_select_thread = threading.Thread(target=mode_select)
 mode_select_thread.start()
+        
+        
+def move_stepper(): 
+    global LA_y
+    global LA_x
+    global LA_x_step_count
+    global LA_y_step_count
+    global max_range
+    global anchor_x
+    global anchor_y
+    global max_LA_x_range
+    global max_LA_y_range
+    while True:
+        try:
+            LA_x_step_count=((LA_x - anchor_x)/max_LA_x_range)*max_LA_x_range
+            LA_y_step_count=((LA_y- anchor_y)/max_LA_y_range)*max_LA_x_range
+            
+        except (IndexError, AttributeError):
+            # Keep the previous value if detection fails
+            pass
+        time.sleep(0.06)
+        if keyboard.is_pressed('space'):
+            print("space is pressed, return to modeselection")
+            time.sleep(1)
+            command_done.set()
+            mode_select_thread.join()
+            break
+    
+def A_pose_reset():
+    global LA_x_step_count
+    global LA_y_step_count
+    LA_x_step_count=0
+    LA_y_step_count=0
+    command_done.set()
+    mode_select_thread.join()    
+        
