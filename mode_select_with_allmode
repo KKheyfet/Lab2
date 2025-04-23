@@ -14,6 +14,8 @@ left_shoulder_y=0
 left_shoulder_x=0
 anchor_y=0
 anchor_x=0
+LAAP_x_step=0 #left_arm_a_pose_x_step
+LAAP_y_step=0 #left_arm_a_pose_x_step
 max_arm_y_range=200
 max_arm_x_range=100
 LA_x_step_count=0 #initialize value for testing, later can be an input from motion capture
@@ -93,6 +95,7 @@ def mode_select():
                 command_done.set()
                 A_pose_reset_done.clear()
                 threading.Thread(target=A_pose_reset).start()
+                
 client_restart_thread=threading.Thread(target=client_restart)  
 client_restart_thread.start()              
 mode_select_thread = threading.Thread(target=mode_select)
@@ -104,6 +107,7 @@ def calibration():
     global ls_x, ls_y
     global anchor_x, anchor_y
     global max_LA_x_range, max_LA_y_range
+    global arm_length
     if not calibration_done.is_set():
         anchor_x=LA_x
         anchor_y=LA_y
@@ -120,6 +124,7 @@ def calibration():
 def move_stepper(): 
     global LA_y
     global LA_x
+    global arm_length
     global LA_x_step_count
     global LA_y_step_count
     global max_arm_y_step_range
@@ -131,8 +136,8 @@ def move_stepper():
     global max_LA_y_range
     while not move_stepper_done.is_set():
         try:
-            LA_x_step_count=((LA_x - anchor_x)/max_LA_x_range)*max_arm_x_step_range
-            LA_y_step_count=((LA_y- anchor_y)/max_LA_y_range)*max_arm_y_step_range
+            LA_x_step_count=(abs(LA_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range
+            LA_y_step_count=((abs(LA_y- (left_shoulder_y + arm_length)))/max_LA_y_range)*max_arm_y_step_range
             print("LA_x_step_count: ", LA_x_step_count)
             print("LA_y_step_count: ", LA_y_step_count)
         except (IndexError, AttributeError):
