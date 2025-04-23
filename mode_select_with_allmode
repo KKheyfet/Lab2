@@ -1,21 +1,79 @@
-import threading
+# receiver.py
+import socket
 import time
 import math
 import sys
 import select
-LA_y=2
-LA_x=2
+import threading
+#//////////////////////////////////////////////////////////////////////
+#initialize all value
+
+LA_y=0
+LA_x=0
 left_shoulder_y=0
 left_shoulder_x=0
 anchor_y=0
 anchor_x=0
-max_range=200
+max_arm_y_range=200
+max_arm_x_range=100
 LA_x_step_count=0 #initialize value for testing, later can be an input from motion capture
 LA_y_step_count=0
 command_done = threading.Event()
 calibration_done = threading.Event()
 move_stepper_done=threading.Event()
 A_pose_reset_done=threading.Event()
+
+#//////////////////////////////////////////////////////////////////////////////
+def handle_client(conn, addr):
+    global LA_x
+    global LA_y
+    global ls_x
+    global ls_y
+    print(f"[+] Connection from {addr}")
+    buffer = ""
+
+    try:
+        while True:
+            data = conn.recv(1024).decode()
+            if not data:
+                break
+            buffer += data
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                print("[Received]", line)
+
+                try:
+                    x_str, y_str, ls_x_str, ls_y_str = line.strip().split(",")
+                    LA_x = int(x_str)
+                    LA_y = int(y_str)
+                    ls_x = int(ls_x_str)
+                    ls_y = int(ls_y_str)
+                    print(f"[Parsed] LA_x = {LA_x}, LA_y = {LA_y}, LS_x = {ls_x}, LS_y = {ls_y}")
+                except ValueError:
+                    print("[Warning] Malformed message:", line)
+
+    except Exception as e:
+        print("[Error]", e)
+    finally:
+        conn.close()
+        print(f"[-] Connection from {addr} closed")
+        
+# Main server setup
+HOST = '0.0.0.0'
+PORT = 5000
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.bind((HOST, PORT))
+server.listen()
+
+
+def client_restart():
+	while True:
+	    conn, addr = server.accept()
+	    # Start a new thread for each client
+	    client_thread = threading.Thread(target=handle_client, args=(conn, addr))
+	    client_thread.start()
+
 def mode_select():
     while True:
         if not command_done.is_set():  # Only prompt if not calibrating
@@ -35,15 +93,22 @@ def mode_select():
                 command_done.set()
                 A_pose_reset_done.clear()
                 threading.Thread(target=A_pose_reset).start()
-
+client_restart_thread=threading.Thread(target=client_restart)  
+client_restart_thread.start()              
+mode_select_thread = threading.Thread(target=mode_select)
+mode_select_thread.start()
+        
 def calibration():
     global LA_x, LA_y
     global left_shoulder_x, left_shoulder_y
+    global ls_x, ls_y
     global anchor_x, anchor_y
     global max_LA_x_range, max_LA_y_range
     if not calibration_done.is_set():
         anchor_x=LA_x
         anchor_y=LA_y
+        left_shoulder_x=ls_x
+        left_shoulder_y=ls_y
         arm_length=math.sqrt(abs(left_shoulder_x - LA_x)**2 +abs(left_shoulder_y - LA_y)**2)
         max_LA_x_range = arm_length 
         max_LA_y_range = arm_length*2
@@ -52,25 +117,24 @@ def calibration():
         print("Calibration complete!")
         command_done.clear()  # Signal completion
         calibration_done.set()
-   
-
-        
-        
 def move_stepper(): 
     global LA_y
     global LA_x
     global LA_x_step_count
     global LA_y_step_count
-    global max_range
+    global max_arm_y_step_range
+    global max_arm_x_step_range
     global anchor_x
     global anchor_y
+    global left_shoulder_x, left_shoulder_y
     global max_LA_x_range
     global max_LA_y_range
     while not move_stepper_done.is_set():
         try:
-            LA_x_step_count=((LA_x - anchor_x)/max_LA_x_range)*max_LA_x_range
-            LA_y_step_count=((LA_y- anchor_y)/max_LA_y_range)*max_LA_x_range
+            LA_x_step_count=((LA_x - anchor_x)/max_LA_x_range)*max_arm_x_step_range
+            LA_y_step_count=((LA_y- anchor_y)/max_LA_y_range)*max_arm_y_step_range
             print("LA_x_step_count: ", LA_x_step_count)
+            print("LA_y_step_count: ", LA_y_step_count)
         except (IndexError, AttributeError):
             # Keep the previous value if detection fails
             pass
@@ -88,11 +152,9 @@ def A_pose_reset():
     if not A_pose_reset_done.is_set():
         LA_x_step_count=0
         LA_y_step_count=0
+        print("LA_x_step_count ", LA_x_step_count)
+        print("LA_y_step_count ", LA_y_step_count)
         command_done.clear()
         A_pose_reset_done.set()
        
-        
-
-mode_select_thread = threading.Thread(target=mode_select)
-mode_select_thread.start()
-        
+   
