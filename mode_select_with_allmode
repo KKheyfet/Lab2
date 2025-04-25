@@ -22,10 +22,14 @@ anchor_ra_y=0
 anchor_ra_x=0
 max_arm_y_step_range=200
 max_arm_x_step_range=100
+max_leg_y_step_range=200
+max_head_y_step_range=100
 LA_x_step_count=0 #initialize value for testing, later can be an input from motion capture
 LA_y_step_count=0
 RA_x_step_count=0 #initialize value for testing, later can be an input from motion capture
 RA_y_step_count=0
+lf_y_step_count=0
+Rf_y_step_count=0
 command_done = threading.Event()
 calibration_done = threading.Event()
 move_stepper_done=threading.Event()
@@ -41,7 +45,7 @@ def handle_client(conn, addr):
     global ls_y
     global rs_x
     global rs_y
-
+    global head_y, lh_y, rh_y, lf_y, rf_y
     print(f"[+] Connection from {addr}")
     buffer = ""
 
@@ -56,7 +60,8 @@ def handle_client(conn, addr):
                 print("[Received]", line)
 
                 try:
-                    x_str, y_str, ls_x_str, ls_y_str, ra_x_str, ra_y_str, rs_x_str, rs_y_str = line.strip().split(",")
+                    head_str, x_str, y_str, ls_x_str, ls_y_str, ra_x_str, ra_y_str, rs_x_str, rs_y_str,lh_y_str, rh_y_str, lf_y_str, rf_y_str = line.strip().split(",")
+                    head_y = int(head_str)
                     LA_x = int(x_str)
                     LA_y = int(y_str)
                     ls_x = int(ls_x_str)
@@ -65,8 +70,11 @@ def handle_client(conn, addr):
                     RA_y = int(ra_y_str)
                     rs_x = int(rs_x_str) 
                     rs_y = int(rs_y_str)
-
-                    print(f"[Parsed] LA_x = {LA_x}, LA_y = {LA_y}, LS_x = {ls_x}, LS_y = {ls_y}, RA_x={RA_x}, RA_y={RA_y}, RS_x = {rs_x}, RS_y = {rs_y}")
+                    lh_y = int(lh_y_str)
+                    rh_y = int(rh_y_str)
+                    lf_y = int(lf_y_str)
+                    rf_y = int(rf_y_str)
+                    print(f"[Parsed] LA_x = {LA_x}, LA_y = {LA_y}, LS_x = {ls_x}, LS_y = {ls_y}, RA_x={RA_x}, RA_y={RA_y}, RS_x = {rs_x}, RS_y = {rs_y},LH_y = {lh_y}, RH_y = {rh_y}, LF_y = {lf_y}, RF_y = {rf_y}")
                 except ValueError:
                     print("[Warning] Malformed message:", line)
 
@@ -118,35 +126,47 @@ mode_select_thread = threading.Thread(target=mode_select)
 mode_select_thread.start()
         
 def calibration():
+    global head_y
     global LA_x, LA_y, RA_x, RA_y
-    global left_shoulder_x, left_shoulder_y , right_shoulder_x , right_shoulder_y
     global ls_x, ls_y, rs_x, rs_y
-    global anchor_la_x, anchor_la_y, anchor_ra_x, anchor_ra_y
+    global lh_y, rh_y, lf_y, rf_y
+    global left_shoulder_x, left_shoulder_y , right_shoulder_x , right_shoulder_y, left_hip_y, right_hip_y
+    global anchor_head_y, anchor_la_x, anchor_la_y, anchor_ra_x, anchor_ra_y, anchor_lf_y, anchor_rf_y
     global max_LA_x_range, max_LA_y_range, max_RA_x_range, max_RA_y_range
-    global left_arm_length,right_arm_length
-    global LA_x_step_count, LA_y_step_count, RA_x_step_count, RA_y_step_count
+    global left_arm_length,right_arm_length, right_leg_height, left_leg_height
+    global LA_x_step_count, LA_y_step_count, RA_x_step_count, RA_y_step_count, lf_y_step_count, rf_y_step_count 
     if not calibration_done.is_set():
+        anchor_head_y= head_y
         anchor_la_x=LA_x
         anchor_la_y=LA_y
         anchor_ra_x=RA_x
         anchor_ra_y=RA_y
+        anchor_lf_y=lf_y
+        anchor_rf_y=rf_y
         left_shoulder_x=ls_x
         left_shoulder_y=ls_y
         right_shoulder_x=rs_x
         right_shoulder_y=rs_y
+        left_hip_y=lh_y
+        right_hip_y=rh_y
         left_arm_length=math.sqrt(abs(left_shoulder_x - LA_x)**2 +abs(left_shoulder_y - LA_y)**2)
         right_arm_length=math.sqrt(abs(right_shoulder_x - RA_x)**2 +abs(right_shoulder_y - RA_y)**2)
+        left_leg_height = left_hip_y - anchor_lf_y
+        right_leg_height = right_hip_y - anchor_rf_y
         max_LA_x_range = left_arm_length 
         max_LA_y_range = left_arm_length*2
         max_RA_x_range = right_arm_length 
         max_RA_y_range = right_arm_length*2
-        LA_x_step_count=(abs(anchor_la_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range #left_arm_a_pose_x_step
-        LA_y_step_count=((abs(anchor_la_y- (left_shoulder_y + left_arm_length)))/max_LA_y_range)*max_arm_y_step_range#left_arm_a_pose_y_step
+        LA_x_step_count=(abs(anchor_la_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range  #left_arm_a_pose_x_step
+        LA_y_step_count=((abs(anchor_la_y- (left_shoulder_y + left_arm_length)))/max_LA_y_range)*max_arm_y_step_range #left_arm_a_pose_y_step
         RA_x_step_count= (abs(anchor_ra_x - right_shoulder_x)/max_RA_x_range)*max_arm_x_step_range #right_arm_a_pose_x_step
         RA_y_step_count=((abs(anchor_ra_y- (right_shoulder_y + right_arm_length)))/max_LA_y_range)*max_arm_y_step_range #right_arm_a_pose_y_step
-        print(f"Calibrating... anchor_la_x: {anchor_la_x}, anchor_la_y: {anchor_la_y}, anchor_ra_x: {anchor_ra_x}, anchor_ra_y: {anchor_ra_y}")
+        lf_y_step_count=((left_hip_y - anchor_lf_y)/left_leg_height)*max_leg_y_step_range
+        rf_y_step_count=((right_hip_y- anchor_rf_y)/right_leg_height)*max_leg_y_step_range
+        print(f"Calibrating... anchor_la_x: {anchor_la_x}, anchor_la_y: {anchor_la_y}, anchor_ra_x: {anchor_ra_x}, anchor_ra_y: {anchor_ra_y}, anchor_lf_y: {anchor_lf_y}, anchor_rf_y: {anchor_rf_y}")
         print(f"max_LA_x_range: {max_LA_x_range}, max_LA_y_range: {max_LA_y_range}")
         print(f"max_RA_x_range: {max_RA_x_range}, max_RA_y_range: {max_RA_y_range}")
+        print(f"left_leg_height: {left_leg_height}, right_leg_height: {right_leg_height}")
         print("Calibration complete!")
         command_done.clear()  # Signal completion
         calibration_done.set()
