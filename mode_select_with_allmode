@@ -173,20 +173,26 @@ def calibration():
 def move_stepper(): 
     global LA_y
     global LA_x
-    global left_arm_length, right_arm_length
+    global left_arm_length , right_arm_length
     global LA_x_step_count , RA_x_step_count
     global LA_y_step_count , RA_y_step_count
+    global lh_y, rh_y, lf_y, rf_y
+    global left_hip_y, right_hip_y
     global max_arm_y_step_range
     global max_arm_x_step_range
     global left_shoulder_x, left_shoulder_y
     global max_LA_x_range
     global max_LA_y_range
+    global lf_y_step_count
+    global rf_y_step_count
     while not move_stepper_done.is_set():
         try:
             LA_x_step_count=(abs(LA_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range
             LA_y_step_count=((abs(LA_y- (left_shoulder_y + left_arm_length)))/max_LA_y_range)*max_arm_y_step_range
             RA_x_step_count= (abs(RA_x - right_shoulder_x)/max_RA_x_range)*max_arm_x_step_range
             RA_y_step_count=((abs(RA_y- (right_shoulder_y + right_arm_length)))/max_LA_y_range)*max_arm_y_step_range
+            lf_y_step_count=((left_hip_y - lf_y)/left_leg_height)*max_leg_y_step_range
+            rf_y_step_count=((right_hip_y- rf_y)/right_leg_height)*max_leg_y_step_range
             print(f"LA_x_step_count: {LA_x_step_count}, LA_y_step_count:  {LA_y_step_count}")
             print(f"RA_x_step_count: {RA_x_step_count}, RA_y_step_count:  {RA_y_step_count}")
         except (IndexError, AttributeError):
