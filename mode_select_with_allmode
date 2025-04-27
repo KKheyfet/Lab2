@@ -3,6 +3,7 @@ import socket
 import time
 import math
 import sys
+import serial
 import select
 import threading
 #//////////////////////////////////////////////////////////////////////
@@ -12,6 +13,8 @@ LA_y=0
 LA_x=0
 RA_x=0
 RA_y=0
+lf_y=0
+rf_y=0
 left_shoulder_y=0
 left_shoulder_x=0
 right_shoulder_x=0
@@ -23,18 +26,22 @@ anchor_ra_x=0
 max_arm_y_step_range=200
 max_arm_x_step_range=100
 max_leg_y_step_range=200
-max_head_y_step_range=100
+max_bow_y_step_range=100
 LA_x_step_count=0 #initialize value for testing, later can be an input from motion capture
 LA_y_step_count=0
 RA_x_step_count=0 #initialize value for testing, later can be an input from motion capture
 RA_y_step_count=0
 lf_y_step_count=0
-Rf_y_step_count=0
+rf_y_step_count=0
+shoulder_step_count =0
+hip_step_count=0
 command_done = threading.Event()
 calibration_done = threading.Event()
 move_stepper_done=threading.Event()
 A_pose_reset_done=threading.Event()
-
+#//////////////////////////////////////////////////////////////////////////////
+ser = serial.Serial('/dev/ttyACM0', 9600)  # Make sure baudrate matches Arduino
+time.sleep(2)  # Give Arduino time to reset
 #//////////////////////////////////////////////////////////////////////////////
 def handle_client(conn, addr):
     global LA_x
@@ -45,7 +52,7 @@ def handle_client(conn, addr):
     global ls_y
     global rs_x
     global rs_y
-    global head_y, lh_y, rh_y, lf_y, rf_y
+    global lh_y, rh_y, lf_y, rf_y
     print(f"[+] Connection from {addr}")
     buffer = ""
 
@@ -60,8 +67,7 @@ def handle_client(conn, addr):
                 print("[Received]", line)
 
                 try:
-                    head_str, x_str, y_str, ls_x_str, ls_y_str, ra_x_str, ra_y_str, rs_x_str, rs_y_str,lh_y_str, rh_y_str, lf_y_str, rf_y_str = line.strip().split(",")
-                    head_y = int(head_str)
+                    x_str, y_str, ls_x_str, ls_y_str, ra_x_str, ra_y_str, rs_x_str, rs_y_str,lh_y_str, rh_y_str, lf_y_str, rf_y_str = line.strip().split(",")
                     LA_x = int(x_str)
                     LA_y = int(y_str)
                     ls_x = int(ls_x_str)
@@ -120,35 +126,31 @@ def mode_select():
                 A_pose_reset_done.clear()
                 threading.Thread(target=A_pose_reset).start()
                 
-client_restart_thread=threading.Thread(target=client_restart)  
-client_restart_thread.start()              
-mode_select_thread = threading.Thread(target=mode_select)
-mode_select_thread.start()
         
 def calibration():
-    global head_y
     global LA_x, LA_y, RA_x, RA_y
     global ls_x, ls_y, rs_x, rs_y
     global lh_y, rh_y, lf_y, rf_y
     global left_shoulder_x, left_shoulder_y , right_shoulder_x , right_shoulder_y, left_hip_y, right_hip_y
-    global anchor_head_y, anchor_la_x, anchor_la_y, anchor_ra_x, anchor_ra_y, anchor_lf_y, anchor_rf_y
-    global max_LA_x_range, max_LA_y_range, max_RA_x_range, max_RA_y_range
+    global anchor_la_x, anchor_la_y, anchor_ra_x, anchor_ra_y, anchor_lf_y, anchor_rf_y, anchor_shoulder, anchor_hip
+    global max_LA_x_range, max_LA_y_range, max_RA_x_range, max_RA_y_range, max_bow_range
     global left_arm_length,right_arm_length, right_leg_height, left_leg_height
-    global LA_x_step_count, LA_y_step_count, RA_x_step_count, RA_y_step_count, lf_y_step_count, rf_y_step_count 
+    global LA_x_step_count, LA_y_step_count, RA_x_step_count, RA_y_step_count, lf_y_step_count, rf_y_step_count, shoulder_step_count, hip_step_count
     if not calibration_done.is_set():
-        anchor_head_y= head_y
         anchor_la_x=LA_x
         anchor_la_y=LA_y
         anchor_ra_x=RA_x
         anchor_ra_y=RA_y
         anchor_lf_y=lf_y
-        anchor_rf_y=rf_y
+        anchor_rf_y=rf_y 
         left_shoulder_x=ls_x
         left_shoulder_y=ls_y
         right_shoulder_x=rs_x
         right_shoulder_y=rs_y
         left_hip_y=lh_y
         right_hip_y=rh_y
+        anchor_shoulder = (left_shoulder_y+right_shoulder_y)/2
+        anchor_hip = (left_hip_y+right_hip_y)/2
         left_arm_length=math.sqrt(abs(left_shoulder_x - LA_x)**2 +abs(left_shoulder_y - LA_y)**2)
         right_arm_length=math.sqrt(abs(right_shoulder_x - RA_x)**2 +abs(right_shoulder_y - RA_y)**2)
         left_leg_height = left_hip_y - anchor_lf_y
@@ -157,12 +159,14 @@ def calibration():
         max_LA_y_range = left_arm_length*2
         max_RA_x_range = right_arm_length 
         max_RA_y_range = right_arm_length*2
+        max_bow_range = (anchor_shoulder-anchor_hip)
+        shoulder_step_count = int(abs((left_shoulder_y-left_hip_y)/max_bow_range)*max_bow_y_step_range)
         LA_x_step_count=(abs(anchor_la_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range  #left_arm_a_pose_x_step
         LA_y_step_count=((abs(anchor_la_y- (left_shoulder_y + left_arm_length)))/max_LA_y_range)*max_arm_y_step_range #left_arm_a_pose_y_step
         RA_x_step_count= (abs(anchor_ra_x - right_shoulder_x)/max_RA_x_range)*max_arm_x_step_range #right_arm_a_pose_x_step
         RA_y_step_count=((abs(anchor_ra_y- (right_shoulder_y + right_arm_length)))/max_LA_y_range)*max_arm_y_step_range #right_arm_a_pose_y_step
-        lf_y_step_count=((left_hip_y - anchor_lf_y)/left_leg_height)*max_leg_y_step_range
-        rf_y_step_count=((right_hip_y- anchor_rf_y)/right_leg_height)*max_leg_y_step_range
+        lf_y_step_count=((left_hip_y - anchor_lf_y)/left_leg_height)*max_leg_y_step_range #left leg a pose step count
+        rf_y_step_count=((right_hip_y- anchor_rf_y)/right_leg_height)*max_leg_y_step_range #right leg a pose step count
         print(f"Calibrating... anchor_la_x: {anchor_la_x}, anchor_la_y: {anchor_la_y}, anchor_ra_x: {anchor_ra_x}, anchor_ra_y: {anchor_ra_y}, anchor_lf_y: {anchor_lf_y}, anchor_rf_y: {anchor_rf_y}")
         print(f"max_LA_x_range: {max_LA_x_range}, max_LA_y_range: {max_LA_y_range}")
         print(f"max_RA_x_range: {max_RA_x_range}, max_RA_y_range: {max_RA_y_range}")
@@ -171,30 +175,33 @@ def calibration():
         command_done.clear()  # Signal completion
         calibration_done.set()
 def move_stepper(): 
-    global LA_y
-    global LA_x
+    global LA_y,RA_y
+    global LA_x,RA_x
     global left_arm_length , right_arm_length
     global LA_x_step_count , RA_x_step_count
     global LA_y_step_count , RA_y_step_count
-    global lh_y, rh_y, lf_y, rf_y
+    global lh_y, rh_y, lf_y, rf_y, ls_y
     global left_hip_y, right_hip_y
-    global max_arm_y_step_range
-    global max_arm_x_step_range
+    global max_arm_x_step_range ,max_leg_y_step_range,max_arm_y_step_range, max_bow_y_step_range
     global left_shoulder_x, left_shoulder_y
     global max_LA_x_range
-    global max_LA_y_range
-    global lf_y_step_count
-    global rf_y_step_count
+    global max_LA_y_range,max_bow_range
+    global lf_y_step_count,rf_y_step_count
+    global left_leg_height,right_leg_height
+    global shoulder_step_count 
     while not move_stepper_done.is_set():
         try:
-            LA_x_step_count=(abs(LA_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range
-            LA_y_step_count=((abs(LA_y- (left_shoulder_y + left_arm_length)))/max_LA_y_range)*max_arm_y_step_range
-            RA_x_step_count= (abs(RA_x - right_shoulder_x)/max_RA_x_range)*max_arm_x_step_range
-            RA_y_step_count=((abs(RA_y- (right_shoulder_y + right_arm_length)))/max_LA_y_range)*max_arm_y_step_range
-            lf_y_step_count=((left_hip_y - lf_y)/left_leg_height)*max_leg_y_step_range
-            rf_y_step_count=((right_hip_y- rf_y)/right_leg_height)*max_leg_y_step_range
+            LA_x_step_count=int((abs(LA_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range)
+            LA_y_step_count=int(((abs(LA_y- (left_shoulder_y + left_arm_length)))/max_LA_y_range)*max_arm_y_step_range)
+            RA_x_step_count= int((abs(RA_x - right_shoulder_x)/max_RA_x_range)*max_arm_x_step_range)
+            RA_y_step_count=int(((abs(RA_y- (right_shoulder_y + right_arm_length)))/max_LA_y_range)*max_arm_y_step_range)
+            lf_y_step_count=int(((left_hip_y - lf_y)/left_leg_height)*max_leg_y_step_range)
+            rf_y_step_count=int(((right_hip_y- rf_y)/right_leg_height)*max_leg_y_step_range)
+            shoulder_step_count= int(abs((ls_y-left_shoulder_y)/max_bow_range)*max_bow_y_step_range)
+            print(f"shoulder_step_count: {shoulder_step_count}")
             print(f"LA_x_step_count: {LA_x_step_count}, LA_y_step_count:  {LA_y_step_count}")
             print(f"RA_x_step_count: {RA_x_step_count}, RA_y_step_count:  {RA_y_step_count}")
+            print(f"LF_y_step_count: {lf_y_step_count}, RF_y_step_count:  {rf_y_step_count}")
         except (IndexError, AttributeError):
             # Keep the previous value if detection fails
             pass
@@ -209,15 +216,49 @@ def move_stepper():
 def A_pose_reset():
     global LA_x_step_count, RA_x_step_count
     global LA_y_step_count, RA_y_step_count
+    global lf_y_step_count,rf_y_step_count, shoulder_step_count 
     if not A_pose_reset_done.is_set():
         LA_x_step_count=0
         LA_y_step_count=0
         RA_x_step_count=0
         RA_y_step_count=0
+        lf_y_step_count=0
+        rf_y_step_count=0
+        shoulder_step_count =0
         print("LA_x_step_count ", LA_x_step_count)
         print("LA_y_step_count ", LA_y_step_count)
         print("RA_x_step_count ", RA_x_step_count)
         print("RA_y_step_count ", RA_y_step_count)
+        print("lf_y_step_count ", lf_y_step_count)
+        print("rf_y_step_count ", rf_y_step_count)
+        print("shoulder_step_count ", shoulder_step_count)
         command_done.clear()
         A_pose_reset_done.set()
        
+def Arduino_data_transmission():
+    global LA_x_step_count, RA_x_step_count
+    global LA_y_step_count, RA_y_step_count
+    global lf_y_step_count, rf_y_step_count, shoulder_step_count
+    global message
+    global ser  # So we can reopen if needed
+
+    while True:
+        message = f"{shoulder_step_count},{LA_x_step_count},{LA_y_step_count},{RA_x_step_count},{RA_y_step_count},{lf_y_step_count},{rf_y_step_count}\n"
+
+        try:
+            ser.write(message.encode())  # Try to send
+            print(f"[Sent] {message.strip()}")
+            if ser.in_waiting > 0:  # Check if there is something to read
+                received = ser.readline().decode('utf-8').strip()
+                print(f"[Received] {received}")
+        except serial.SerialException as e:
+            print("[Error] Serial write failed:", e)
+            print("[Action] Attempting to reconnect...")
+            # Try to reconnect
+        time.sleep(0.1)  # Add a tiny delay so we don't flood
+client_restart_thread=threading.Thread(target=client_restart)  
+client_restart_thread.start()              
+mode_select_thread = threading.Thread(target=mode_select)
+mode_select_thread.start()
+Arduino_data_transmission_thread=threading.Thread(target=Arduino_data_transmission)  
+Arduino_data_transmission_thread.start()  
