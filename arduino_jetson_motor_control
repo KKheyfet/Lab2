@@ -1,0 +1,34 @@
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(9600); // Start serial communication
+  // Remove "while (!Serial)" for Uno, Mega
+  Serial.setTimeout(100); // Optional: prevent forever waiting if Jetson disconnects
+}
+
+
+void loop() {
+  if (Serial.available() > 0) {
+    int shoulder_step_count = Serial.parseInt();
+    int left_arm_x_stepcount = Serial.parseInt();
+    int left_arm_y_stepcount = Serial.parseInt();
+    int right_arm_x_stepcount = Serial.parseInt();
+    int right_arm_y_stepcount = Serial.parseInt();
+    int left_foot_stepcount = Serial.parseInt();
+    int right_foot_stepcount = Serial.parseInt();
+    int reset = Serial.parseInt();
+
+
+    Serial.read(); // Discard the leftover newline
+
+
+    // Arduino prints values
+    Serial.print("shoulder_step_count: "); Serial.println(shoulder_step_count);
+    Serial.print("left_arm_x_stepcount: "); Serial.println(left_arm_x_stepcount);
+    Serial.print("left_arm_y_stepcount: "); Serial.println(left_arm_y_stepcount);
+    Serial.print("right_arm_x_stepcount: "); Serial.println(right_arm_x_stepcount);
+    Serial.print("right_arm_y_stepcount: "); Serial.println(right_arm_y_stepcount);
+    Serial.print("left_foot_stepcount: "); Serial.println(left_foot_stepcount);
+    Serial.print("right_foot_stepcount: "); Serial.println(right_foot_stepcount);
+    Serial.print("reset: "); Serial.println(reset);
+  }
+}
