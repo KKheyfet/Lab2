@@ -2,13 +2,13 @@
 import socket
 import time
 import math
-import sys
 import serial
 import select
 import threading
+import tkinter as tk
 #//////////////////////////////////////////////////////////////////////
 #initialize all value
-
+reset=1
 LA_y=0
 LA_x=0
 RA_x=0
@@ -64,7 +64,7 @@ def handle_client(conn, addr):
             buffer += data
             while "\n" in buffer:
                 line, buffer = buffer.split("\n", 1)
-                print("[Received]", line)
+                #print("[Received]", line)
 
                 try:
                     x_str, y_str, ls_x_str, ls_y_str, ra_x_str, ra_y_str, rs_x_str, rs_y_str,lh_y_str, rh_y_str, lf_y_str, rf_y_str = line.strip().split(",")
@@ -80,7 +80,7 @@ def handle_client(conn, addr):
                     rh_y = int(rh_y_str)
                     lf_y = int(lf_y_str)
                     rf_y = int(rf_y_str)
-                    print(f"[Parsed] LA_x = {LA_x}, LA_y = {LA_y}, LS_x = {ls_x}, LS_y = {ls_y}, RA_x={RA_x}, RA_y={RA_y}, RS_x = {rs_x}, RS_y = {rs_y},LH_y = {lh_y}, RH_y = {rh_y}, LF_y = {lf_y}, RF_y = {rf_y}")
+                    #print(f"[Parsed] LA_x = {LA_x}, LA_y = {LA_y}, LS_x = {ls_x}, LS_y = {ls_y}, RA_x={RA_x}, RA_y={RA_y}, RS_x = {rs_x}, RS_y = {rs_y},LH_y = {lh_y}, RH_y = {rh_y}, LF_y = {lf_y}, RF_y = {rf_y}")
                 except ValueError:
                     print("[Warning] Malformed message:", line)
 
@@ -100,34 +100,37 @@ server.listen()
 
 
 def client_restart():
-	while True:
-	    conn, addr = server.accept()
-	    # Start a new thread for each client
-	    client_thread = threading.Thread(target=handle_client, args=(conn, addr))
-	    client_thread.start()
-
-def mode_select():
     while True:
-        if not command_done.is_set():  # Only prompt if not calibrating
-            Mode = input("Enter mode (C/S/Q): ").lower()
-            if Mode == 'c':
-                print('Calibration started')
-                command_done.set()
-                calibration_done.clear()
-                threading.Thread(target=calibration).start()
-            elif Mode == 's':
-                print('Mirroring started')
-                command_done.set()
-                move_stepper_done.clear()
-                threading.Thread(target=move_stepper).start()
-            elif Mode == 'q':
-                print('quit and reset to A pose')
-                command_done.set()
-                A_pose_reset_done.clear()
-                threading.Thread(target=A_pose_reset).start()
+        conn, addr = server.accept()
+        # Start a new thread for each client
+        client_thread = threading.Thread(target=handle_client, args=(conn, addr))
+        client_thread.start()
+
                 
+
+
+def mode_select(Mode):
+    if Mode == 'calibration':
+        threading.Thread(target=calibration).start()
+        calibration_done.clear()
+        print('Calibration started')
+    elif Mode == 'mirroring':
+        threading.Thread(target=move_stepper).start()
+        move_stepper_done.clear()
+        print('Mirroring started')
+    elif Mode == 'stop mirroring':
+        move_stepper_done.set()
+        print("Exiting loop.")
+    elif Mode == 'reset':
+        threading.Thread(target=A_pose_reset).start()
+        A_pose_reset_done.clear()
+        print('Quit and reset to A pose')
+
         
+
+
 def calibration():
+    global reset
     global LA_x, LA_y, RA_x, RA_y
     global ls_x, ls_y, rs_x, rs_y
     global lh_y, rh_y, lf_y, rf_y
@@ -137,6 +140,7 @@ def calibration():
     global left_arm_length,right_arm_length, right_leg_height, left_leg_height
     global LA_x_step_count, LA_y_step_count, RA_x_step_count, RA_y_step_count, lf_y_step_count, rf_y_step_count, shoulder_step_count, hip_step_count
     if not calibration_done.is_set():
+        reset=0
         anchor_la_x=LA_x
         anchor_la_y=LA_y
         anchor_ra_x=RA_x
@@ -160,13 +164,13 @@ def calibration():
         max_RA_x_range = right_arm_length 
         max_RA_y_range = right_arm_length*2
         max_bow_range = (anchor_shoulder-anchor_hip)
-        shoulder_step_count = int(abs((left_shoulder_y-left_hip_y)/max_bow_range)*max_bow_y_step_range)
-        LA_x_step_count=(abs(anchor_la_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range  #left_arm_a_pose_x_step
-        LA_y_step_count=((abs(anchor_la_y- (left_shoulder_y + left_arm_length)))/max_LA_y_range)*max_arm_y_step_range #left_arm_a_pose_y_step
-        RA_x_step_count= (abs(anchor_ra_x - right_shoulder_x)/max_RA_x_range)*max_arm_x_step_range #right_arm_a_pose_x_step
-        RA_y_step_count=((abs(anchor_ra_y- (right_shoulder_y + right_arm_length)))/max_LA_y_range)*max_arm_y_step_range #right_arm_a_pose_y_step
-        lf_y_step_count=((left_hip_y - anchor_lf_y)/left_leg_height)*max_leg_y_step_range #left leg a pose step count
-        rf_y_step_count=((right_hip_y- anchor_rf_y)/right_leg_height)*max_leg_y_step_range #right leg a pose step count
+        shoulder_step_count= int(abs((ls_y-left_shoulder_y)/max_bow_range)*max_bow_y_step_range)
+        LA_x_step_count=int((abs(anchor_la_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range)  #left_arm_a_pose_x_step
+        LA_y_step_count=int(((abs(anchor_la_y- (left_shoulder_y - left_arm_length)))/max_LA_y_range)*max_arm_y_step_range) #left_arm_a_pose_y_step
+        RA_x_step_count= int((abs(anchor_ra_x - right_shoulder_x)/max_RA_x_range)*max_arm_x_step_range) #right_arm_a_pose_x_step
+        RA_y_step_count=int(((abs(anchor_ra_y- (right_shoulder_y - right_arm_length)))/max_LA_y_range)*max_arm_y_step_range) #right_arm_a_pose_y_step
+        lf_y_step_count=int(((left_hip_y - anchor_lf_y)/left_leg_height)*max_leg_y_step_range) #left leg a pose step count
+        rf_y_step_count=int(((right_hip_y- anchor_rf_y)/right_leg_height)*max_leg_y_step_range) #right leg a pose step count
         print(f"Calibrating... anchor_la_x: {anchor_la_x}, anchor_la_y: {anchor_la_y}, anchor_ra_x: {anchor_ra_x}, anchor_ra_y: {anchor_ra_y}, anchor_lf_y: {anchor_lf_y}, anchor_rf_y: {anchor_rf_y}")
         print(f"max_LA_x_range: {max_LA_x_range}, max_LA_y_range: {max_LA_y_range}")
         print(f"max_RA_x_range: {max_RA_x_range}, max_RA_y_range: {max_RA_y_range}")
@@ -192,33 +196,28 @@ def move_stepper():
     while not move_stepper_done.is_set():
         try:
             LA_x_step_count=int((abs(LA_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range)
-            LA_y_step_count=int(((abs(LA_y- (left_shoulder_y + left_arm_length)))/max_LA_y_range)*max_arm_y_step_range)
+            LA_y_step_count=int(((abs(LA_y- (left_shoulder_y - left_arm_length)))/max_LA_y_range)*max_arm_y_step_range)
             RA_x_step_count= int((abs(RA_x - right_shoulder_x)/max_RA_x_range)*max_arm_x_step_range)
-            RA_y_step_count=int(((abs(RA_y- (right_shoulder_y + right_arm_length)))/max_LA_y_range)*max_arm_y_step_range)
+            RA_y_step_count=int(((abs(RA_y- (right_shoulder_y - right_arm_length)))/max_LA_y_range)*max_arm_y_step_range)
             lf_y_step_count=int(((left_hip_y - lf_y)/left_leg_height)*max_leg_y_step_range)
             rf_y_step_count=int(((right_hip_y- rf_y)/right_leg_height)*max_leg_y_step_range)
             shoulder_step_count= int(abs((ls_y-left_shoulder_y)/max_bow_range)*max_bow_y_step_range)
-            print(f"shoulder_step_count: {shoulder_step_count}")
-            print(f"LA_x_step_count: {LA_x_step_count}, LA_y_step_count:  {LA_y_step_count}")
-            print(f"RA_x_step_count: {RA_x_step_count}, RA_y_step_count:  {RA_y_step_count}")
-            print(f"LF_y_step_count: {lf_y_step_count}, RF_y_step_count:  {rf_y_step_count}")
+            #print(f"shoulder_step_count: {shoulder_step_count}")
+            #print(f"LA_x_step_count: {LA_x_step_count}, LA_y_step_count:  {LA_y_step_count}")
+            #print(f"RA_x_step_count: {RA_x_step_count}, RA_y_step_count:  {RA_y_step_count}")
+            #print(f"LF_y_step_count: {lf_y_step_count}, RF_y_step_count:  {rf_y_step_count}")
         except (IndexError, AttributeError):
             # Keep the previous value if detection fails
             pass
         time.sleep(0.06)
-        if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-            line = sys.stdin.readline()
-            if line.strip() == 'r':
-                print("Exiting loop.")
-                move_stepper_done.set()
-                command_done.clear()
     
 def A_pose_reset():
+    global reset
     global LA_x_step_count, RA_x_step_count
     global LA_y_step_count, RA_y_step_count
     global lf_y_step_count,rf_y_step_count, shoulder_step_count 
     if not A_pose_reset_done.is_set():
-        LA_x_step_count=0
+        reset=1
         LA_y_step_count=0
         RA_x_step_count=0
         RA_y_step_count=0
@@ -232,10 +231,10 @@ def A_pose_reset():
         print("lf_y_step_count ", lf_y_step_count)
         print("rf_y_step_count ", rf_y_step_count)
         print("shoulder_step_count ", shoulder_step_count)
-        command_done.clear()
         A_pose_reset_done.set()
        
 def Arduino_data_transmission():
+    global reset
     global LA_x_step_count, RA_x_step_count
     global LA_y_step_count, RA_y_step_count
     global lf_y_step_count, rf_y_step_count, shoulder_step_count
@@ -243,14 +242,15 @@ def Arduino_data_transmission():
     global ser  # So we can reopen if needed
 
     while True:
-        message = f"{shoulder_step_count},{LA_x_step_count},{LA_y_step_count},{RA_x_step_count},{RA_y_step_count},{lf_y_step_count},{rf_y_step_count}\n"
+        message = f"{shoulder_step_count},{LA_x_step_count},{LA_y_step_count},{RA_x_step_count},{RA_y_step_count},{lf_y_step_count},{rf_y_step_count},{reset}\n"
 
         try:
             ser.write(message.encode())  # Try to send
             print(f"[Sent] {message.strip()}")
-            if ser.in_waiting > 0:  # Check if there is something to read
-                received = ser.readline().decode('utf-8').strip()
-                print(f"[Received] {received}")
+            time.sleep(0.05)  # (Short wait to let Arduino respond)
+            while ser.in_waiting > 0:  # While Arduino has sent something
+                line = ser.readline().decode('utf-8').strip()
+                print(f"[Arduino] {line}")
         except serial.SerialException as e:
             print("[Error] Serial write failed:", e)
             print("[Action] Attempting to reconnect...")
@@ -258,7 +258,30 @@ def Arduino_data_transmission():
         time.sleep(0.1)  # Add a tiny delay so we don't flood
 client_restart_thread=threading.Thread(target=client_restart)  
 client_restart_thread.start()              
-mode_select_thread = threading.Thread(target=mode_select)
-mode_select_thread.start()
 Arduino_data_transmission_thread=threading.Thread(target=Arduino_data_transmission)  
 Arduino_data_transmission_thread.start()  
+
+def start_thread(task_name):
+    thread = threading.Thread(target=mode_select, args=(task_name,))
+    thread.start()
+
+# Set up the GUI
+window = tk.Tk()
+window.title("Marionette Mode Selector")
+window.geometry("400x300")
+
+# Create multiple buttons
+button1 = tk.Button(window, text="Task 1: Calibration", command=lambda: start_thread("calibration"))
+button1.pack(pady=20)
+
+button2 = tk.Button(window, text="Task 2: Mirroring", command=lambda: start_thread("mirroring"))
+button2.pack(pady=20)
+
+button3 = tk.Button(window, text="Task 3: Stop Mirroring", command=lambda: start_thread("stop mirroring"))
+button3.pack(pady=20)
+
+button4 = tk.Button(window, text="Task 4: Reset", command=lambda: start_thread("reset"))
+button4.pack(pady=20)
+
+# Run the GUI event loop
+window.mainloop()
