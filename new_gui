@@ -1,0 +1,59 @@
+import tkinter as tk
+import threading
+
+# Dummy function to simulate each task
+def mode_select(Mode):
+    if Mode == 'calibration':
+        
+        print('Calibration started')
+    elif Mode == 'mirroring':
+        
+        print('Mirroring started')
+    elif Mode == 'stop mirroring':
+        print("Exiting loop.")
+    elif Mode == 'reset':
+    
+        print('Quit and reset to A pose')
+
+def start_thread(task_name):
+    thread = threading.Thread(target=mode_select, args=(task_name,))
+    thread.start()
+
+def show_next_button(index):
+    if index < len(buttons):
+        buttons[index].pack(pady=20)
+
+def reset_buttons():
+    # Hide all buttons
+    for btn in buttons:
+        btn.pack_forget()
+    # Show only the first button again
+    buttons[0].pack(pady=20)
+# Set up the GUI
+window = tk.Tk()
+window.title("Marionette Mode Selector")
+window.geometry("400x300")
+
+# Initialize the buttons list
+buttons = []
+
+# Create multiple buttons (only pack the first one)
+button1 = tk.Button(window, text="Task 1: Calibration",
+                    command=lambda: (start_thread("calibration"), show_next_button(1)))
+button1.pack(pady=20)
+buttons.append(button1)
+
+button2 = tk.Button(window, text="Task 2: Mirroring",
+                    command=lambda: (start_thread("mirroring"), show_next_button(2)))
+buttons.append(button2)
+
+button3 = tk.Button(window, text="Task 3: Stop Mirroring",
+                    command=lambda: (start_thread("stop mirroring"), show_next_button(3)))
+buttons.append(button3)
+
+button4 = tk.Button(window, text="Task 4: Reset",
+                    command=lambda: (start_thread("reset"),  reset_buttons()))
+buttons.append(button4)
+
+# Run the GUI event loop
+window.mainloop()
