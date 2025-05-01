@@ -32,27 +32,36 @@ def reset_buttons():
 # Set up the GUI
 window = tk.Tk()
 window.title("Marionette Mode Selector")
-window.geometry("400x300")
+window.geometry("300x400")
 
 # Initialize the buttons list
 buttons = []
 
+button_style = {
+    "bg": "#4CAF50",
+    "fg": "white",
+    "activebackground": "#45a049",
+    "activeforeground": "white",
+    "font": ("Helvetica", 12, "bold"),
+    "width": 25,
+    "height": 2,
+}
 # Create multiple buttons (only pack the first one)
 button1 = tk.Button(window, text="Task 1: Calibration",
-                    command=lambda: (start_thread("calibration"), show_next_button(1)))
+                    command=lambda: (start_thread("calibration"), show_next_button(1)),**button_style)
 button1.pack(pady=20)
 buttons.append(button1)
 
 button2 = tk.Button(window, text="Task 2: Mirroring",
-                    command=lambda: (start_thread("mirroring"), show_next_button(2)))
+                    command=lambda: (start_thread("mirroring"), show_next_button(2)),**button_style)
 buttons.append(button2)
 
 button3 = tk.Button(window, text="Task 3: Stop Mirroring",
-                    command=lambda: (start_thread("stop mirroring"), show_next_button(3)))
+                    command=lambda: (start_thread("stop mirroring"), show_next_button(3)),**button_style)
 buttons.append(button3)
 
 button4 = tk.Button(window, text="Task 4: Reset",
-                    command=lambda: (start_thread("reset"),  reset_buttons()))
+                    command=lambda: (start_thread("reset"),  reset_buttons()),**button_style)
 buttons.append(button4)
 
 # Run the GUI event loop
