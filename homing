@@ -7,7 +7,7 @@
 #define dirPin1 3
 
 // Limit switches
-ezButton limitSwitch1(3); // LA_y min
+ezButton limitSwitch1(22); // LA_y min
 
 
 
