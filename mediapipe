@@ -1,0 +1,120 @@
+
+import cv2
+import mediapipe as mp
+import time
+import socket
+
+HOST = 'motor-control-container'
+PORT = 5000
+
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client.connect((HOST, PORT))
+
+#================================================================================================================
+
+#HOST = 'motor-control-container'  # Use container name due to Docker network
+#PORT = 5000
+#client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#client.connect((HOST, PORT))
+
+#================================================================================================================
+
+
+# Initialize MediaPipe Pose
+mp_pose = mp.solutions.pose
+#pose = mp_pose.Pose()
+pose = mp_pose.Pose(model_complexity=0)  # 0 for Lite, 1 for Full, 2 for Heavy
+
+# Open the camera
+cap = cv2.VideoCapture(0)
+try:
+    while True:
+        # Start time for the entire loop
+        loop_start_time = time.time()
+
+        # Capture frame
+        capture_start_time = time.time()
+        ret, frame = cap.read()
+        if not ret:
+            break
+        capture_time = time.time() - capture_start_time
+
+        # Convert the frame to RGB
+        rgb_start_time = time.time()
+        # Resize frame for faster processing
+        resized_frame = cv2.resize(frame, (256, 256))
+        rgb_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB)
+        #rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        rgb_time = time.time() - rgb_start_time
+
+        # Process the frame with MediaPipe Pose
+        inference_start_time = time.time()
+        results = pose.process(rgb_frame)
+        inference_time = time.time() - inference_start_time
+
+        # Draw pose landmarks on the frame
+        draw_start_time = time.time()
+        
+        #if results.pose_landmarks:
+        #    mp.solutions.drawing_utils.draw_landmarks(
+        #        frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+
+
+        if results.pose_landmarks:
+            # Draw landmarks
+            mp.solutions.drawing_utils.draw_landmarks(frame, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+            # # Get and print landmark coordinates
+            height, width, _ = frame.shape
+            left_shoulder = results.pose_landmarks.landmark[11]
+            left_wrist = results.pose_landmarks.landmark[15]  # index for left wrist
+            right_shoulder = results.pose_landmarks.landmark[12]
+            right_wrist = results.pose_landmarks.landmark[16]  # index for right wrist
+            left_hip = results.pose_landmarks.landmark[23]
+            right_hip = results.pose_landmarks.landmark[24]
+            left_foot = results.pose_landmarks.landmark[27]
+            right_foot = results.pose_landmarks.landmark[28] 
+            ls_x = int(left_shoulder.x * width)
+            ls_y = int(left_shoulder.y * height)
+            x_px = int(left_wrist.x * width)
+            y_px = int(left_wrist.y * height)
+            rs_x = int(right_shoulder.x * width)
+            rs_y = int(right_shoulder.y * height)
+            ra_x = int(right_wrist.x * width)
+            ra_y = int(right_wrist.y * height)
+            lh_y = int(left_hip.y * height)
+            rh_y = int(right_hip.y * height)
+            lf_y = int(left_foot.y * height)
+            rf_y = int(right_foot.y * height)
+            message = f"{x_px},{y_px},{ls_x},{ls_y},{ra_x},{ra_y},{rs_x},{rs_y},{lh_y},{rh_y},{lf_y},{rf_y}\n"  # Use newline as message delimiter
+            client.sendall(message.encode())
+            print(f"[Sent] la_x={x_px}, la_y={y_px}")
+            print(f"[Sent] ls_x={ls_x}, ls_y={ls_y}")
+            print(f"[Sent] ra_x={ra_x}, ra_y={ra_y}")
+            print(f"[Sent] rs_x={rs_x}, rs_y={rs_y}")
+            print(f"[Sent] lh_y={lh_y}, rh_y={rh_y}")
+            print(f"[Sent] lf_y={lf_y}, rf_y={rf_y}")
+
+        draw_time = time.time() - draw_start_time
+
+        # Display the frame
+        display_start_time = time.time()
+        cv2.imshow("MediaPipe Pose", frame)
+        display_time = time.time() - display_start_time
+
+        # Calculate total loop time
+        loop_time = time.time() - loop_start_time
+
+        # Print timings
+        print(f"Capture: {capture_time:.3f}s, RGB Conversion: {rgb_time:.3f}s, "
+            f"Inference: {inference_time:.3f}s, Draw: {draw_time:.3f}s, "
+            f"Display: {display_time:.3f}s, Total Loop: {loop_time:.3f}s")
+
+        # Exit on 'q' key press
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+finally:
+    client.close()
+
+# Release resources
+cap.release()
+cv2.destroyAllWindows()
