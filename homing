@@ -5,32 +5,32 @@
 // STEP/DIR pins for each stepper
 #define stepPin1 2 //LA_y
 #define dirPin1 3
-#define stepPin2 4 //LA_y
+#define stepPin2 4 //RA_y
 #define dirPin2 5
-#define stepPin3 6 //LA_y
+#define stepPin3 6 //LA_x
 #define dirPin3 7
-#define stepPin4 8 //LA_y
+#define stepPin4 8 //RA_x
 #define dirPin4 9
-#define stepPin5 10 //LA_y
+#define stepPin5 10 //LL_y
 #define dirPin5 11
-#define stepPin6 12 //LA_y
+#define stepPin6 12 //RL_y
 #define dirPin6 13
-#define stepPin7 14 //LA_y
+#define stepPin7 14 //hip_y
 #define dirPin7 15
-#define stepPin8 16 //LA_y
+#define stepPin8 16 //shoulder_y
 #define dirPin8 17
 
 // Limit switches
-ezButton limitSwitch1(22); 
-ezButton limitSwitch2(23); 
-ezButton limitSwitch3(24); 
-ezButton limitSwitch4(25); 
-ezButton limitSwitch5(26); 
-ezButton limitSwitch6(27);
-ezButton limitSwitch7(28); 
-ezButton limitSwitch8(29); 
-ezButton limitSwitch9(30); 
-ezButton limitSwitch10(31); 
+ezButton limitSwitch1(22); //la_y_min
+ezButton limitSwitch2(23); //ra_y_min
+ezButton limitSwitch3(24); //hip_y_min
+ezButton limitSwitch4(25); //shoulder_min
+ezButton limitSwitch5(32);  //la_x_max
+ezButton limitSwitch6(27);  //ra_x_max
+ezButton limitSwitch7(28);  //la_xmin
+ezButton limitSwitch8(29);  //left_leg_y
+ezButton limitSwitch9(30);  //ra_x min
+ezButton limitSwitch10(31); //right leg_y
 // Stepper objects
 AccelStepper stepper1(AccelStepper::DRIVER, stepPin1, dirPin1);
 AccelStepper stepper2(AccelStepper::DRIVER, stepPin2, dirPin2);
@@ -50,6 +50,26 @@ bool motor5home = false;
 bool motor6home = false;
 bool motor7home = false;
 bool motor8home = false;
+long LA_y_minLimit = 0;
+long RA_y_minLimit = 0;
+long LA_x_minLimit = 0;
+long LA_x_maxLimit = 210;
+long RA_x_minLimit = 0;
+long RA_x_maxLimit = 210;
+long lf_y_min = 0;
+long rf_y_min = 0;
+long hip_minLimit = 0;
+long shoulder_minLimit = 0;
+int shoulder_step_count=65;
+int hip_stepcount = 140;
+int left_arm_x_stepcount = 100;
+int left_arm_y_stepcount = 420;
+int right_arm_x_stepcount = 100;
+int right_arm_y_stepcount = 420;
+int left_foot_stepcount = 480;
+int right_foot_stepcount = 480;
+
+long reset=1;
 // Position limits
 
 void setup() {
@@ -76,7 +96,7 @@ void setup() {
   stepper5.setMaxSpeed(200); stepper5.setAcceleration(3000);
   stepper6.setMaxSpeed(200); stepper6.setAcceleration(3000);
   stepper7.setMaxSpeed(200); stepper7.setAcceleration(3000);
-  stepper8.setMaxSpeed(400); stepper8.setAcceleration(3000);
+  stepper8.setMaxSpeed(200); stepper8.setAcceleration(3000);
   //stepper1.setSpeed(200)
   // declare dicrection
   stepper1.setPinsInverted(true, false);  
@@ -89,7 +109,96 @@ void setup() {
   stepper8.setPinsInverted(false, false);  
 }
 
-void loop() {
+void LimitInterupt() {
+    limitSwitch1.loop();
+    limitSwitch2.loop();
+    limitSwitch3.loop();
+    limitSwitch4.loop();
+    limitSwitch5.loop();
+    limitSwitch6.loop();
+    limitSwitch7.loop();
+    limitSwitch8.loop();
+    limitSwitch9.loop();
+    limitSwitch10.loop();
+  if (limitSwitch1.getState() == HIGH) {
+      stepper1.stop();
+      while (stepper1.isRunning()) {
+        stepper1.run();  // make sure it fully stops
+      }
+      stepper1.setCurrentPosition(0);  // reset position to zero
+      //Serial.println("Motor 1 homed.");
+    }
+  if (limitSwitch2.getState() == HIGH) {
+    stepper2.stop();
+    while (stepper2.isRunning()) {
+      stepper2.run();  // make sure it fully stops
+    }
+    stepper2.setCurrentPosition(0);  // reset position to zero
+    //Serial.println("Motor 2 homed.");
+  }
+    if (limitSwitch3.getState() == HIGH) {
+    stepper7.stop();
+    while (stepper7.isRunning()) {
+      stepper7.run();  // make sure it fully stops
+    }
+    stepper7.setCurrentPosition(0);  // reset position to zero
+    //Serial.println("Motor 7 homed.");
+  }
+    if (limitSwitch4.getState() == HIGH) {
+    stepper8.stop();
+    while (stepper8.isRunning()) {
+      stepper8.run();  // make sure it fully stops
+    }
+    stepper8.setCurrentPosition(0);  // reset position to zero
+    // Serial.println("Motor 8 homed.");
+  }
+    if (limitSwitch7.getState() == HIGH) {
+    stepper3.stop();
+    while (stepper3.isRunning()) {
+      stepper3.run();  // make sure it fully stops
+    }
+    stepper3.setCurrentPosition(0);  // reset position to zero
+    //Serial.println("Motor 3 homed.");
+  }
+    if (limitSwitch8.getState() == HIGH) {
+    stepper5.stop();
+    while (stepper5.isRunning()) {
+      stepper5.run();  // make sure it fully stops
+    }
+    stepper5.setCurrentPosition(0);  // reset position to zero
+    //Serial.println("Motor 5 homed.");
+  }
+  if (limitSwitch9.getState() == HIGH) {
+    stepper4.stop();
+    while (stepper4.isRunning()) {
+      stepper4.run();  // make sure it fully stops
+    }
+    stepper4.setCurrentPosition(0);  // reset position to zero
+    //Serial.println("Motor 4 homed.");
+  }
+  if (limitSwitch10.getState() == HIGH) {
+    stepper6.stop();
+    while (stepper6.isRunning()) {
+      stepper6.run();  // make sure it fully stops
+    }
+      stepper6.setCurrentPosition(0);  // reset position to zero
+      //Serial.println("Motor 6 homed.");
+  }
+  if (limitSwitch5.getState() == HIGH) {
+    stepper3.stop();
+    while (stepper3.isRunning()) {
+      stepper3.run();  // make sure it fully stops
+    }
+  }
+  if (limitSwitch6.getState() == HIGH) {
+    stepper4.stop();
+    while (stepper4.isRunning()) {
+      stepper4.run();  // make sure it fully stops
+    }
+  }
+}
+
+void dohome() {
   if (!homingDone) {
     if (!homingStarted) {
       Serial.println("Starting homing...");
@@ -194,10 +303,41 @@ void loop() {
       stepper6.setCurrentPosition(0);  // reset position to zero
       //Serial.println("Motor 6 homed.");
     }
-    if (motor1home&&motor2home&&motor3home&&motor4home&&motor5home&&motor6home&&motor7home&&motor8home)
+    if (motor1home&&motor2home&&motor3home&&motor4home&&motor5home&&motor6home&&motor8home)
     {
       homingDone=true;
       Serial.println("all motor homing done.");
+      reset=2;
+      return;
     }
+    }else if (homingDone){
+      Serial.println("already at home, exit loop.");
+      return;
+    }
+    
+  }
+
+
+void loop(){
+  LimitInterupt();
+  if (reset==1){
+    dohome();
+  } else if (reset==2){
+    stepper1.run();  // <-- keep it moving!
+    stepper2.run();  // <-- keep it moving!
+    stepper3.run();  
+    stepper4.run();  
+    stepper5.run(); 
+    stepper6.run();  
+    stepper7.run();  
+    stepper8.run();  
+    stepper1.moveTo(max(left_arm_y_stepcount, LA_y_minLimit));
+    stepper2.moveTo(max(right_arm_y_stepcount, RA_y_minLimit));
+    stepper3.moveTo(constrain(left_arm_x_stepcount, LA_x_minLimit, LA_x_maxLimit));
+    stepper4.moveTo(constrain(right_arm_x_stepcount, RA_x_minLimit, RA_x_maxLimit));
+    stepper5.moveTo(max(left_foot_stepcount, lf_y_min));
+    stepper6.moveTo(max(right_foot_stepcount, rf_y_min));
+    stepper7.moveTo(max(hip_stepcount, hip_minLimit));
+    stepper8.moveTo(max(shoulder_step_count, shoulder_minLimit));          
   }
 }
