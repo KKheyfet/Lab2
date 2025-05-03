@@ -9,15 +9,11 @@
 // Limit switches
 ezButton limitSwitch1(22); // LA_y min
 
-
-
 // Stepper objects
 AccelStepper stepper1(AccelStepper::DRIVER, stepPin1, dirPin1);
-
+bool homingDone = false;
+bool homingStarted=false;
 // Position limits
-long LA_y_minLimit = 0;
-int reset=1
-int step_count = 200
 
 void setup() {
   Serial.begin(9600);
@@ -25,45 +21,30 @@ void setup() {
   // Initialize limit switch debounce
   limitSwitch1.setDebounceTime(50);
   // Configure steppers
-  stepper1.setMaxSpeed(200); stepper1.setAcceleration(100);
+  stepper1.setMaxSpeed(200); 
   // declare dicrection
   stepper1.setPinsInverted(true, false);  
 }
 
-
-void doHoming() {
-  Serial.println("Starting homing...");
-  stepper1.moveTo(-10000);
-  bool motor1Homed = false;
-  while (true) {
-    // Update all limit switches
-    limitSwitch1.loop(); 
-    if (!motor1Homed) stepper1.run();
-
-    if (limitSwitch1.isPressed() && !motor1Homed) {
-      stepper1.stop();
-      while (stepper1.isRunning()) stepper1.run();
-      stepper1.setCurrentPosition(0);
-      motor1Homed = true;
-      Serial.println("Motor 1 homed.");
+void loop() {
+  if (!homingDone) {
+    if (!homingStarted) {
+      Serial.println("Starting homing...");
+      stepper1.moveTo(-10000);
+      homingStarted = true;
     }
-    if (motor1Homed) {
-      Serial.println("All motors homed successfully!");
-      reset=0
-      break;
+
+    limitSwitch1.loop();
+    stepper1.run();  // <-- keep it moving!
+
+    if (limitSwitch1.isPressed()) {
+      stepper1.stop();
+      while (stepper1.isRunning()) {
+        stepper1.run();  // make sure it fully stops
+      }
+      stepper1.setCurrentPosition(0);  // reset position to zero
+      Serial.println("Motor 1 homed.");
+      homingDone = true;
     }
   }
 }
-
-
-void loop() {
-  limitSwitch1.loop();
-    if (reset == 1) {
-      doHoming();
-    } else if (reset == 0) {
-      // Move Y-direction arms
-      stepper1.moveTo(max(stepcount, LA_y_minLimit));
-      // Update limits dynamically if max limit switches are hit
-    }
-    stepper1.run();
-  }
