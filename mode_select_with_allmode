@@ -8,7 +8,7 @@ import threading
 import tkinter as tk
 #//////////////////////////////////////////////////////////////////////
 #initialize all value
-reset=1
+reset=0
 LA_y=0
 LA_x=0
 RA_x=0
@@ -23,10 +23,11 @@ anchor_la_y=0
 anchor_la_x=0
 anchor_ra_y=0
 anchor_ra_x=0
-max_arm_y_step_range=200
-max_arm_x_step_range=100
-max_leg_y_step_range=200
+max_arm_y_step_range=420
+max_arm_x_step_range=210
+max_leg_y_step_range=480
 max_bow_y_step_range=100
+max_hip_y_step_range=200
 LA_x_step_count=0 #initialize value for testing, later can be an input from motion capture
 LA_y_step_count=0
 RA_x_step_count=0 #initialize value for testing, later can be an input from motion capture
@@ -106,22 +107,29 @@ def client_restart():
         client_thread = threading.Thread(target=handle_client, args=(conn, addr))
         client_thread.start()
 
-                
-
+            
 
 def mode_select(Mode):
+    global reset
+    if Mode == 'Start':
+        reset=1
+        print('Homing started')
     if Mode == 'calibration':
+        reset=2
         threading.Thread(target=calibration).start()
         calibration_done.clear()
         print('Calibration started')
     elif Mode == 'mirroring':
+        reset=3
         threading.Thread(target=move_stepper).start()
         move_stepper_done.clear()
         print('Mirroring started')
     elif Mode == 'stop mirroring':
+        reset=4
         move_stepper_done.set()
         print("Exiting loop.")
     elif Mode == 'reset':
+        reset=5
         threading.Thread(target=A_pose_reset).start()
         A_pose_reset_done.clear()
         print('Quit and reset to A pose')
@@ -130,7 +138,6 @@ def mode_select(Mode):
 
 
 def calibration():
-    global reset
     global LA_x, LA_y, RA_x, RA_y
     global ls_x, ls_y, rs_x, rs_y
     global lh_y, rh_y, lf_y, rf_y
@@ -140,7 +147,6 @@ def calibration():
     global left_arm_length,right_arm_length, right_leg_height, left_leg_height
     global LA_x_step_count, LA_y_step_count, RA_x_step_count, RA_y_step_count, lf_y_step_count, rf_y_step_count, shoulder_step_count, hip_step_count
     if not calibration_done.is_set():
-        reset=0
         anchor_la_x=LA_x
         anchor_la_y=LA_y
         anchor_ra_x=RA_x
@@ -157,20 +163,21 @@ def calibration():
         anchor_hip = (left_hip_y+right_hip_y)/2
         left_arm_length=math.sqrt(abs(left_shoulder_x - LA_x)**2 +abs(left_shoulder_y - LA_y)**2)
         right_arm_length=math.sqrt(abs(right_shoulder_x - RA_x)**2 +abs(right_shoulder_y - RA_y)**2)
-        left_leg_height = left_hip_y - anchor_lf_y
-        right_leg_height = right_hip_y - anchor_rf_y
+        left_leg_height = anchor_lf_y - left_hip_y 
+        right_leg_height = anchor_rf_y- right_hip_y
         max_LA_x_range = left_arm_length 
         max_LA_y_range = left_arm_length*2
         max_RA_x_range = right_arm_length 
         max_RA_y_range = right_arm_length*2
         max_bow_range = (anchor_shoulder-anchor_hip)
         shoulder_step_count= int(abs((ls_y-left_shoulder_y)/max_bow_range)*max_bow_y_step_range)
-        LA_x_step_count=int((abs(anchor_la_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range)  #left_arm_a_pose_x_step
-        LA_y_step_count=int(((abs(anchor_la_y- (left_shoulder_y - left_arm_length)))/max_LA_y_range)*max_arm_y_step_range) #left_arm_a_pose_y_step
-        RA_x_step_count= int((abs(anchor_ra_x - right_shoulder_x)/max_RA_x_range)*max_arm_x_step_range) #right_arm_a_pose_x_step
-        RA_y_step_count=int(((abs(anchor_ra_y- (right_shoulder_y - right_arm_length)))/max_LA_y_range)*max_arm_y_step_range) #right_arm_a_pose_y_step
-        lf_y_step_count=int(((left_hip_y - anchor_lf_y)/left_leg_height)*max_leg_y_step_range) #left leg a pose step count
-        rf_y_step_count=int(((right_hip_y- anchor_rf_y)/right_leg_height)*max_leg_y_step_range) #right leg a pose step count
+        hip_step_count = int((abs(anchor_hip -lh_y)/left_leg_height)*max_hip_y_step_range)
+        RA_x_step_count=int((abs(anchor_la_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range)  #left_arm_a_pose_x_step
+        RA_y_step_count=int(((abs(anchor_la_y- (left_shoulder_y - left_arm_length)))/max_LA_y_range)*max_arm_y_step_range) #left_arm_a_pose_y_step
+        LA_x_step_count= int((abs(anchor_ra_x - right_shoulder_x)/max_RA_x_range)*max_arm_x_step_range) #right_arm_a_pose_x_step
+        LA_y_step_count=int(((abs(anchor_ra_y- (right_shoulder_y - right_arm_length)))/max_LA_y_range)*max_arm_y_step_range) #right_arm_a_pose_y_step
+        rf_y_step_count=int((abs(left_hip_y - anchor_lf_y)/left_leg_height)*max_leg_y_step_range) #left leg a pose step count
+        lf_y_step_count=int((abs(right_hip_y- anchor_rf_y)/right_leg_height)*max_leg_y_step_range) #right leg a pose step count
         print(f"Calibrating... anchor_la_x: {anchor_la_x}, anchor_la_y: {anchor_la_y}, anchor_ra_x: {anchor_ra_x}, anchor_ra_y: {anchor_ra_y}, anchor_lf_y: {anchor_lf_y}, anchor_rf_y: {anchor_rf_y}")
         print(f"max_LA_x_range: {max_LA_x_range}, max_LA_y_range: {max_LA_y_range}")
         print(f"max_RA_x_range: {max_RA_x_range}, max_RA_y_range: {max_RA_y_range}")
@@ -192,17 +199,19 @@ def move_stepper():
     global max_LA_y_range,max_bow_range
     global lf_y_step_count,rf_y_step_count
     global left_leg_height,right_leg_height
-    global shoulder_step_count 
+    global shoulder_step_count ,hip_step_count
     while not move_stepper_done.is_set():
         try:
-            LA_x_step_count=int((abs(LA_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range)
-            LA_y_step_count=int(((abs(LA_y- (left_shoulder_y - left_arm_length)))/max_LA_y_range)*max_arm_y_step_range)
-            RA_x_step_count= int((abs(RA_x - right_shoulder_x)/max_RA_x_range)*max_arm_x_step_range)
-            RA_y_step_count=int(((abs(RA_y- (right_shoulder_y - right_arm_length)))/max_LA_y_range)*max_arm_y_step_range)
-            lf_y_step_count=int(((left_hip_y - lf_y)/left_leg_height)*max_leg_y_step_range)
-            rf_y_step_count=int(((right_hip_y- rf_y)/right_leg_height)*max_leg_y_step_range)
+            RA_x_step_count=int(((LA_x - left_shoulder_x)/max_LA_x_range)*max_arm_x_step_range)
+            RA_y_step_count=int(((abs(LA_y- (left_shoulder_y - left_arm_length)))/max_LA_y_range)*max_arm_y_step_range)
+            LA_x_step_count= int((RA_x - right_shoulder_x)/max_RA_x_range)*max_arm_x_step_range*(-1)
+            LA_y_step_count=int(((abs(RA_y- (right_shoulder_y - right_arm_length)))/max_LA_y_range)*max_arm_y_step_range)
+            rf_y_step_count=int((abs(left_hip_y - lf_y)/left_leg_height)*max_leg_y_step_range)
+            lf_y_step_count=int((abs(right_hip_y- rf_y)/right_leg_height)*max_leg_y_step_range)
             shoulder_step_count= int(abs((ls_y-left_shoulder_y)/max_bow_range)*max_bow_y_step_range)
+            hip_step_count = int((abs(left_hip_y -lh_y)/left_leg_height)*max_hip_y_step_range)
             #print(f"shoulder_step_count: {shoulder_step_count}")
+            #print(f"hip_step_count : {hip_step_count }")
             #print(f"LA_x_step_count: {LA_x_step_count}, LA_y_step_count:  {LA_y_step_count}")
             #print(f"RA_x_step_count: {RA_x_step_count}, RA_y_step_count:  {RA_y_step_count}")
             #print(f"LF_y_step_count: {lf_y_step_count}, RF_y_step_count:  {rf_y_step_count}")
@@ -212,17 +221,17 @@ def move_stepper():
         time.sleep(0.06)
     
 def A_pose_reset():
-    global reset
     global LA_x_step_count, RA_x_step_count
     global LA_y_step_count, RA_y_step_count
-    global lf_y_step_count,rf_y_step_count, shoulder_step_count 
+    global lf_y_step_count,rf_y_step_count, shoulder_step_count ,hip_step_count 
     if not A_pose_reset_done.is_set():
-        reset=1
+        LA_x_step_count=0
         LA_y_step_count=0
         RA_x_step_count=0
         RA_y_step_count=0
         lf_y_step_count=0
         rf_y_step_count=0
+        hip_step_count = 0 
         shoulder_step_count =0
         print("LA_x_step_count ", LA_x_step_count)
         print("LA_y_step_count ", LA_y_step_count)
@@ -230,6 +239,7 @@ def A_pose_reset():
         print("RA_y_step_count ", RA_y_step_count)
         print("lf_y_step_count ", lf_y_step_count)
         print("rf_y_step_count ", rf_y_step_count)
+        print("hip_step_count ", hip_step_count)
         print("shoulder_step_count ", shoulder_step_count)
         A_pose_reset_done.set()
        
@@ -237,12 +247,12 @@ def Arduino_data_transmission():
     global reset
     global LA_x_step_count, RA_x_step_count
     global LA_y_step_count, RA_y_step_count
-    global lf_y_step_count, rf_y_step_count, shoulder_step_count
+    global lf_y_step_count, rf_y_step_count, shoulder_step_count, hip_step_count
     global message
     global ser  # So we can reopen if needed
 
     while True:
-        message = f"{shoulder_step_count},{LA_x_step_count},{LA_y_step_count},{RA_x_step_count},{RA_y_step_count},{lf_y_step_count},{rf_y_step_count},{reset}\n"
+        message = f"{shoulder_step_count} {hip_step_count} {LA_x_step_count} {LA_y_step_count} {RA_x_step_count} {RA_y_step_count} {lf_y_step_count} {rf_y_step_count} {reset}\n"
 
         try:
             ser.write(message.encode())  # Try to send
@@ -261,27 +271,59 @@ client_restart_thread.start()
 Arduino_data_transmission_thread=threading.Thread(target=Arduino_data_transmission)  
 Arduino_data_transmission_thread.start()  
 
+
 def start_thread(task_name):
     thread = threading.Thread(target=mode_select, args=(task_name,))
     thread.start()
 
+def show_next_button(index):
+    if index < len(buttons):
+        buttons[index].pack(pady=20)
+
+def reset_buttons():
+    # Hide all buttons
+    for btn in buttons:
+        btn.pack_forget()
+    # Show only the first button again
+    buttons[0].pack(pady=20)
 # Set up the GUI
 window = tk.Tk()
 window.title("Marionette Mode Selector")
-window.geometry("400x300")
+window.geometry("300x500")
 
-# Create multiple buttons
-button1 = tk.Button(window, text="Task 1: Calibration", command=lambda: start_thread("calibration"))
+# Initialize the buttons list
+buttons = []
+
+button_style = {
+    "bg": "#4CAF50",
+    "fg": "white",
+    "activebackground": "#45a049",
+    "activeforeground": "white",
+    "font": ("Helvetica", 12, "bold"),
+    "width": 25,
+    "height": 2,
+}
+# Create multiple buttons (only pack the first one)
+button1 = tk.Button(window, text="Task 1: Start",
+                    command=lambda: (start_thread("Start"), show_next_button(1)),**button_style)
 button1.pack(pady=20)
+buttons.append(button1)
 
-button2 = tk.Button(window, text="Task 2: Mirroring", command=lambda: start_thread("mirroring"))
-button2.pack(pady=20)
+button2 = tk.Button(window, text="Task 2: Calibration",
+                    command=lambda: (start_thread("calibration"), show_next_button(2)),**button_style)
+buttons.append(button2)
 
-button3 = tk.Button(window, text="Task 3: Stop Mirroring", command=lambda: start_thread("stop mirroring"))
-button3.pack(pady=20)
+button3 = tk.Button(window, text="Task 3: Mirroring",
+                    command=lambda: (start_thread("mirroring"), show_next_button(3)),**button_style)
+buttons.append(button3)
 
-button4 = tk.Button(window, text="Task 4: Reset", command=lambda: start_thread("reset"))
-button4.pack(pady=20)
+button4 = tk.Button(window, text="Task 4: Stop Mirroring",
+                    command=lambda: (start_thread("stop mirroring"), show_next_button(4)),**button_style)
+buttons.append(button4)
+
+button5 = tk.Button(window, text="Task 5: Reset",
+                    command=lambda: (start_thread("reset"),  reset_buttons()),**button_style)
+buttons.append(button5)
 
 # Run the GUI event loop
 window.mainloop()
